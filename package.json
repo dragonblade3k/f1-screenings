@@ -1,0 +1,30 @@
+{
+  "name": "f1-screenings",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:studio": "prisma studio",
+    "ingest": "tsx scripts/ingest.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.18.0",
+    "cheerio": "^1.0.0",
+    "dotenv": "^17.2.3",
+    "next": "^14.2.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.10",
+    "@types/react": "19.2.9",
+    "prisma": "^5.18.0",
+    "tsx": "^4.16.2",
+    "typescript": "^5.5.4"
+  }
+}

@@ -1,0 +1,66 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Candidate {
+  id            String   @id @default(cuid())
+
+  // statuses: PENDING | VERIFIED | REJECTED
+  status        String   @default("PENDING")
+
+  confidence    Float    @default(0.0)
+
+  sport         String   @default("F1")
+
+  // areas: MUMBAI | THANE | NAVI_MUMBAI | UNKNOWN
+  area          String   @default("UNKNOWN")
+  locality      String   @default("")
+  venueName     String   @default("")
+  address       String   @default("")
+
+  // sessions: FP | QUALI | SPRINT | RACE | UNKNOWN
+  session       String   @default("UNKNOWN")
+
+  startTimeIST  String   @default("") // ISO preferred
+  priceINR      Int      @default(0)
+  bookingUrl    String   @default("")
+  contact       String   @default("")
+  notes         String   @default("")
+
+  sourceUrl     String   @default("")
+  sourceTitle   String   @default("")
+  sourceSnippet String   @default("")
+  rawText       String   @default("")
+  extractedJson String   @default("")
+
+  createdAt     DateTime @default(now())
+  verifiedAt    DateTime?
+
+  Event         Event?
+}
+
+model Event {
+  id           String   @id @default(cuid())
+  candidateId  String?  @unique
+  Candidate    Candidate? @relation(fields: [candidateId], references: [id])
+
+  sport        String   @default("F1")
+  area         String   @default("UNKNOWN")
+  locality     String   @default("")
+  venueName    String
+  address      String   @default("")
+  session      String   @default("UNKNOWN")
+  startTimeIST String   @default("")
+  priceINR     Int      @default(0)
+  bookingUrl   String   @default("")
+  contact      String   @default("")
+  notes        String   @default("")
+  sourceUrl    String   @default("")
+
+  createdAt    DateTime @default(now())
+}
