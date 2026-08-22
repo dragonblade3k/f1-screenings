@@ -1,23 +1,42 @@
 import type { ReactNode } from "react";
+import "./globals.css";
 
 export const metadata = {
-  title: "F1 Screenings (Local POC)",
-  description: "Mumbai + Thane + Navi Mumbai"
+  title: "Paddock — F1 screenings in the Mumbai metro",
+  description:
+    "Find where Formula 1 races are being screened across Mumbai, Thane, and Navi Mumbai. Every listing is verified by a human before it goes live.",
+  openGraph: {
+    title: "Paddock — F1 screenings in the Mumbai metro",
+    description: "Find where Formula 1 races are being screened near you."
+  }
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <body style={{ fontFamily: "system-ui", margin: 0 }}>
-        <div style={{ padding: 16, borderBottom: "1px solid #eee" }}>
-          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-            <a href="/" style={{ textDecoration: "none", fontWeight: 700 }}>
-              F1 Screenings (POC)
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&display=swap"
+          rel="stylesheet"
+        />
+      </head>
+      <body>
+        <header className="site-header">
+          <div className="wrap inner">
+            <a href="/" className="wordmark">
+              <span className="bars" aria-hidden="true"><i /><i /><i /></span>
+              Paddock
             </a>
-            <a href="/admin/inbox">Admin</a>
+            <nav className="nav">
+              <a href="/">Screenings</a>
+              <a href="/admin/inbox">Admin</a>
+            </nav>
           </div>
-        </div>
-        <div style={{ padding: 16 }}>{children}</div>
+        </header>
+
+        <main className="wrap">{children}</main>
       </body>
     </html>
   );

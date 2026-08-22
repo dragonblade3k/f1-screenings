@@ -1,12 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import AdminHeaderInjector from "@/app/admin/AdminHeaderInjector";
+import { areaLabel, sessionKind, sessionLabel, formatWhen, formatPrice, clean } from "@/lib/format";
 
-function areaLabel(a: string) {
-  if (a === "MUMBAI") return "Mumbai";
-  if (a === "THANE") return "Thane";
-  if (a === "NAVI_MUMBAI") return "Navi Mumbai";
-  return "Unknown";
-}
+export const dynamic = "force-dynamic";
 
 export default async function AdminInbox() {
   const pending = await prisma.candidate.findMany({
@@ -15,87 +11,97 @@ export default async function AdminInbox() {
   });
 
   return (
-    <div>
-      <h2 style={{ marginTop: 0 }}>Admin Inbox (PENDING)</h2>
+    <>
+      <section className="hero" style={{ paddingBottom: 18 }}>
+        <div className="eyebrow">Moderation</div>
+        <h1 style={{ fontSize: "clamp(24px, 4.5vw, 32px)" }}>Review queue</h1>
+        <p>
+          Candidates extracted by the ingestion pipeline. Nothing here is public until
+          it is approved.
+        </p>
+      </section>
 
-      <p style={{ opacity: 0.8 }}>
-        Tip: set your token in <code>.env.local</code> and add it in the Admin UI prompt when approving/rejecting.
-      </p>
-
-      <div style={{ display: "flex", gap: 12, marginBottom: 14 }}>
-        <a href="/admin/manual">Manual entry</a>
-        <a href="/admin/all">All candidates</a>
+      <div className="admin-bar">
+        <div className="count">
+          <b>{pending.length}</b> pending {pending.length === 1 ? "candidate" : "candidates"}
+        </div>
+        <div className="btn-row">
+          <a className="btn ghost" href="/admin/manual">Manual entry</a>
+        </div>
       </div>
 
       {pending.length === 0 ? (
-        <p>No pending candidates. Run <code>npm run ingest</code>.</p>
+        <div className="empty">
+          <strong>Queue is clear</strong>
+          Run <code>npm run ingest</code> to pull a new batch of candidates.
+        </div>
       ) : (
-        <div style={{ display: "grid", gap: 12 }}>
-          {pending.map((c) => (
-            <div key={c.id} style={{ border: "1px solid #eee", borderRadius: 10, padding: 12 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                <div>
-                  <div style={{ fontWeight: 800 }}>{c.venueName || "(no venue extracted)"}</div>
-                  <div style={{ opacity: 0.8 }}>
-                    {areaLabel(c.area)} • {c.locality || "—"} • {c.session} • {c.startTimeIST || "—"}
+        <div className="card-grid">
+          {pending.map((c) => {
+            const kind = sessionKind(c.session);
+            const when = formatWhen(c.startTimeIST);
+            const price = formatPrice(c.priceINR);
+            return (
+              <div key={c.id} className="cand">
+                <div className="badge-row">
+                  <span className={`badge ${kind}`}>{sessionLabel(c.session)}</span>
+                  <span className="conf">confidence {c.confidence.toFixed(2)}</span>
+                </div>
+
+                <div className="top">
+                  <div>
+                    <h2 className="venue">{c.venueName || "No venue extracted"}</h2>
+                    <div className="meta">
+                      {areaLabel(c.area)}
+                      {clean(c.locality) ? <><span className="dot">·</span>{clean(c.locality)}</> : null}
+                      {when ? <><span className="dot">·</span>{when.day}{when.time ? ` ${when.time}` : ""}</> : null}
+                    </div>
                   </div>
-                  <div style={{ opacity: 0.8 }}>₹{c.priceINR || 0} {c.bookingUrl ? "• has booking link" : ""}</div>
+                  <div className={`price${price.free ? " free" : ""}`}>{price.text}</div>
                 </div>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ opacity: 0.8 }}>conf: {c.confidence.toFixed(2)}</div>
-                  <div style={{ opacity: 0.8, fontSize: 12 }}>{new Date(c.createdAt).toLocaleString()}</div>
+
+                {c.sourceSnippet ? <div className="snippet">{c.sourceSnippet}</div> : null}
+
+                {c.sourceUrl ? (
+                  <div style={{ marginTop: 9 }}>
+                    <a className="link-sm" href={c.sourceUrl} target="_blank" rel="noopener noreferrer">
+                      {c.sourceTitle || c.sourceUrl} &nearr;
+                    </a>
+                  </div>
+                ) : null}
+
+                <div className="actions">
+                  <form action="/api/admin/approve" method="POST">
+                    <input type="hidden" name="id" value={c.id} />
+                    <button className="btn primary" type="submit">Approve</button>
+                  </form>
+                  <a className="btn" href={`/admin/edit/${c.id}`}>Edit and approve</a>
+                  <form action="/api/admin/reject" method="POST">
+                    <input type="hidden" name="id" value={c.id} />
+                    <button className="btn ghost" type="submit">Reject</button>
+                  </form>
                 </div>
               </div>
-
-              {c.sourceUrl ? (
-                <div style={{ marginTop: 8 }}>
-                  <b>Source:</b> <a href={c.sourceUrl}>{c.sourceUrl}</a>
-                  {c.sourceSnippet ? <div style={{ opacity: 0.8, marginTop: 4 }}>{c.sourceSnippet}</div> : null}
-                </div>
-              ) : null}
-
-              <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
-                <form action={`/api/admin/approve`} method="POST">
-                  <input type="hidden" name="id" value={c.id} />
-                  <button>Approve</button>
-                </form>
-
-                <form action={`/api/admin/reject`} method="POST">
-                  <input type="hidden" name="id" value={c.id} />
-                  <button>Reject</button>
-                </form>
-
-                <a href={`/admin/edit/${c.id}`}>Edit & Approve</a>
-              </div>
-
-              <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
-                Note: approve/reject require header <code>x-admin-token</code> via prompt on submit (see below).
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
-      <AdminTokenHelper />
+      <AdminSetupNote />
       <AdminHeaderInjector />
-    </div>
+    </>
   );
 }
 
-function AdminTokenHelper() {
+function AdminSetupNote() {
   return (
-    <div style={{ marginTop: 18, padding: 12, border: "1px dashed #ddd", borderRadius: 10 }}>
-      <div style={{ fontWeight: 700 }}>One-time setup for local admin actions</div>
-      <ol style={{ margin: "8px 0 0 18px" }}>
-        <li>Open DevTools Console in your browser.</li>
-        <li>Paste this snippet once (it will inject your token into requests):</li>
-      </ol>
-      <pre style={{ background: "#fafafa", padding: 12, borderRadius: 10, overflowX: "auto" }}>{`// Paste in browser console ONCE (local POC)
-window.__ADMIN_TOKEN__ = prompt("Enter ADMIN_TOKEN from .env.local");`}</pre>
-      <p style={{ margin: "8px 0 0 0", opacity: 0.85 }}>
-        Then the approve/reject/edit pages will attach <code>x-admin-token</code> automatically.
-      </p>
+    <div className="empty" style={{ textAlign: "left", marginTop: 22 }}>
+      <strong>Local admin setup</strong>
+      Approve and reject send an <code>x-admin-token</code> header. Set it once per browser
+      session by opening DevTools and running:
+      <div className="snippet" style={{ marginTop: 10 }}>
+        window.__ADMIN_TOKEN__ = prompt(&quot;Enter ADMIN_TOKEN from .env.local&quot;);
+      </div>
     </div>
   );
 }
-
