@@ -87,40 +87,57 @@ async function fetchPageText(url: string) {
   return { title, text: trimmed };
 }
 
+// Ollama's `format` accepts a real JSON Schema and constrains decoding to it,
+// so the model structurally cannot emit a value outside an enum.
+//
+// The previous version passed format: "json" and described the shape inside
+// the prompt as "area": "MUMBAI|THANE|NAVI_MUMBAI|UNKNOWN", meaning "pick one".
+// format: "json" only guarantees the output parses, not that the values are
+// legal, and the model took the pseudo notation literally: rows in the
+// database still hold "MUMBAI|NAVI_MUMBAI" and "FP|QUALI|SPRINT|RACE|UNKNOWN"
+// as single string values, and the literal word "string" wherever the sample
+// showed "address": "string". Constraining decoding is what actually fixes it.
+const EVENT_SCHEMA = {
+  type: "object",
+  properties: {
+    events: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          sport: { type: "string", enum: ["F1"] },
+          area: { type: "string", enum: ["MUMBAI", "THANE", "NAVI_MUMBAI", "UNKNOWN"] },
+          locality: { type: "string" },
+          venueName: { type: "string" },
+          address: { type: "string" },
+          session: { type: "string", enum: ["FP", "QUALI", "SPRINT", "RACE", "UNKNOWN"] },
+          startTimeIST: { type: "string" },
+          priceINR: { type: "integer" },
+          bookingUrl: { type: "string" },
+          contact: { type: "string" },
+          notes: { type: "string" },
+          sourceUrl: { type: "string" },
+          confidence: { type: "number" }
+        },
+        required: ["area", "venueName", "session", "confidence"]
+      }
+    }
+  },
+  required: ["events"]
+} as const;
+
 function extractionPrompt(sourceUrl: string, title: string, pageText: string) {
   return `
 You are extracting F1 screening events for the Mumbai Metro region ONLY (Mumbai, Thane, Navi Mumbai).
-Return STRICT JSON ONLY.
 
 Rules:
 - Include events only if they are clearly in Mumbai OR Thane OR Navi Mumbai (or localities within).
-- If the page does not contain any relevant F1 screening event, return {"events": []}.
-- Try to infer session type if mentioned: FP, QUALI, SPRINT, RACE. Otherwise UNKNOWN.
-- startTimeIST should be a best-effort ISO string; if unknown, empty string.
-- priceINR should be integer (0 if free/unknown).
-- bookingUrl can be empty.
-- confidence from 0.0 to 1.0.
-
-Output schema:
-{
-  "events": [
-    {
-      "sport": "F1",
-      "area": "MUMBAI|THANE|NAVI_MUMBAI|UNKNOWN",
-      "locality": "string",
-      "venueName": "string",
-      "address": "string",
-      "session": "FP|QUALI|SPRINT|RACE|UNKNOWN",
-      "startTimeIST": "string",
-      "priceINR": 0,
-      "bookingUrl": "string",
-      "contact": "string",
-      "notes": "string",
-      "sourceUrl": "string",
-      "confidence": 0.0
-    }
-  ]
-}
+- If the page contains no relevant F1 screening event, return an empty events array.
+- Choose exactly one area and exactly one session per event. Use UNKNOWN when unsure.
+- Leave a string field empty rather than inventing a value or echoing a placeholder.
+- startTimeIST: best effort ISO 8601 string, empty when unknown.
+- priceINR: integer, 0 when free or unknown.
+- confidence: 0.0 to 1.0, how sure you are this is a real F1 screening in the region.
 
 Source URL: ${sourceUrl}
 Title: ${title}
@@ -138,7 +155,7 @@ async function callOllama(prompt: string) {
       model: LLM_MODEL,
       prompt,
       stream: false,
-      format: "json"
+      format: EVENT_SCHEMA
     })
   });
 
