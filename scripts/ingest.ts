@@ -1,6 +1,7 @@
 import "dotenv/config";
 import * as cheerio from "cheerio";
 import { prisma } from "@/lib/prisma.js";
+import { isSameEvent, normalizeKey } from "@/lib/dedupe.js";
 
 
 const OLLAMA_URL = process.env.OLLAMA_URL || "http://localhost:11434";
@@ -169,32 +170,36 @@ async function callOllama(prompt: string) {
   return String(data.response || "").trim();
 }
 
-function normalize(s: string) {
-  return s.toLowerCase().replace(/\s+/g, " ").trim();
-}
-
-// Very lightweight dedupe: venue + session + time
+// Dedupe on venue + session + time, against every stored candidate.
+//
+// The previous version fetched only the single most recent PENDING candidate
+// and compared against that, so a duplicate arriving after any other row had
+// been written was missed. Only the sourceUrl early-out was doing real work.
+//
+// Candidates of every status are checked, not just PENDING: a candidate a
+// human already rejected should not reappear in the queue on the next run.
+//
+// Matching runs in JS after narrowing on session, because the comparison is on
+// normalized text and SQLite's default collation is case sensitive. At this
+// scale (tens of candidates) the narrowed scan is trivial. If it grows, store
+// a normalized key on the row and put a unique index on it.
 async function isDuplicate(venueName: string, session: string, startTimeIST: string, sourceUrl: string) {
-  const vn = normalize(venueName);
-  const st = normalize(startTimeIST);
-
-  const existing = await prisma.candidate.findFirst({
-    where: {
-      status: "PENDING",
-      venueName: { not: "" }
-    },
-    orderBy: { createdAt: "desc" }
+  // Cheapest check first: this page has already been ingested.
+  const sameSource = await prisma.candidate.findFirst({
+    where: { sourceUrl },
+    select: { id: true }
   });
-
-  // cheap early-out: if same sourceUrl already ingested recently, skip
-  const sameSource = await prisma.candidate.findFirst({ where: { sourceUrl } });
   if (sameSource) return true;
 
-  if (!existing) return false;
-  if (normalize(existing.venueName) === vn && String(existing.session) === session && normalize(existing.startTimeIST) === st) {
-    return true;
-  }
-  return false;
+  const incoming = { venueName, startTimeIST };
+  if (!normalizeKey(venueName)) return false;
+
+  const stored = await prisma.candidate.findMany({
+    where: { session },
+    select: { venueName: true, startTimeIST: true }
+  });
+
+  return stored.some((s) => isSameEvent(incoming, s));
 }
 
 async function main() {
