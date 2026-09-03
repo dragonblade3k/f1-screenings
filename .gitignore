@@ -9,3 +9,5 @@ prisma/*.db
 prisma/*.db-journal
 .vercel
 .DS_Store
+dev.log
+*.tsbuildinfo
