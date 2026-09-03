@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      # Prisma generates its client into node_modules and the typecheck imports
+      # those types, so this has to run before tsc. generate reads the schema
+      # only, but the datasource block requires the variable to be present.
+      - run: npx prisma generate
+        env:
+          DATABASE_URL: "file:./ci.db"
+
+      - run: npm run typecheck
+
+      - run: npm test
