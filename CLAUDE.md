@@ -72,15 +72,29 @@ npm run ingest           # needs SERPAPI_API_KEY and a running Ollama
 npm run prisma:migrate   # after editing schema.prisma
 npm run prisma:studio    # browse the database
 npx tsc --noEmit         # typecheck
+npm test                 # vitest, pure units only
 ```
+
+## Testing
+
+`npm test` runs vitest against `lib/format.test.ts` and `lib/dedupe.test.ts`
+(29 cases). Both cover pure functions, so they need no database and no Ollama.
+CI runs `npx prisma generate`, `npm run typecheck`, then `npm test` on every
+pull request and every push to `main`.
+
+The untested surface is everything that touches I/O: `scripts/ingest.ts`,
+the `api/admin/*` handlers, and the server components. Extracting a pure
+function and testing that, the way `isSameEvent` was pulled into `lib/dedupe.ts`,
+is the pattern to follow rather than mocking Prisma.
 
 ## Known issues
 
-- `isDuplicate()` in `ingest.ts` compares each extraction against only the most
-  recent pending candidate rather than all of them, so near-duplicates from
-  different sources can both land. The `sourceUrl` early-out covers the common
-  case.
-- No test suite yet. `lib/format.ts` is pure and is the right place to start.
+- Ingestion has no retry or backoff. A transient SerpAPI or Ollama failure drops
+  that URL for the run; the next run picks it up again because nothing was
+  written.
+- `isDuplicate()` loads every candidate for the session into memory on each
+  extraction. Correct, and fine at the current row count, but it is a table scan
+  per item rather than an indexed lookup.
 
 ## A note on this file
 
