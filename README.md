@@ -165,11 +165,11 @@ see [DEPLOY.md](./DEPLOY.md).
 
 ## Known limitations
 
-- `isDuplicate()` compares each new extraction against only the most recent
-  pending candidate instead of all of them, so near-duplicates arriving from
-  different sources can both land. The `sourceUrl` early-out catches the common
-  case but not this one.
-- No automated tests yet. `lib/format.ts` is pure and should be covered first.
+- `isDuplicate()` compares each extraction against every stored candidate for
+  that session, which is correct but is a scan per extraction rather than an
+  indexed lookup on a stored normalized key.
+- Ingestion has no retry or backoff, so a transient SerpAPI or Ollama failure
+  drops that URL for the run. Nothing is written, so the next run picks it up.
 - Ingestion is sequential across 20 queries and takes a few minutes.
 - Admin auth is a single shared token in an env var. Adequate for a
   one-operator tool, not for anything more.
