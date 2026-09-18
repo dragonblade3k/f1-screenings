@@ -170,11 +170,32 @@ async function callOllama(prompt: string) {
   return String(data.response || "").trim();
 }
 
+// Has this page already been ingested? Every candidate row records the URL it
+// came from, so a single matching row means the page was processed on an
+// earlier run and there is nothing new to read from it.
+//
+// This check is per page, and is made before the page is fetched. It used to
+// live at the top of isDuplicate(), which runs once per extracted event: the
+// first event from a page wrote its row, and every later event from that same
+// page then matched that row's sourceUrl and was discarded as a duplicate of
+// itself. Most search hits are listings that name several venues, so in
+// practice a page contributed its first venue and the rest were dropped
+// silently. Running the check once per page also skips the page fetch and the
+// extraction call for pages already seen, instead of paying for both and
+// throwing the result away.
+async function alreadyIngested(sourceUrl: string) {
+  const seen = await prisma.candidate.findFirst({
+    where: { sourceUrl },
+    select: { id: true }
+  });
+  return seen !== null;
+}
+
 // Dedupe on venue + session + time, against every stored candidate.
 //
 // The previous version fetched only the single most recent PENDING candidate
 // and compared against that, so a duplicate arriving after any other row had
-// been written was missed. Only the sourceUrl early-out was doing real work.
+// been written was missed.
 //
 // Candidates of every status are checked, not just PENDING: a candidate a
 // human already rejected should not reappear in the queue on the next run.
@@ -183,14 +204,7 @@ async function callOllama(prompt: string) {
 // normalized text and SQLite's default collation is case sensitive. At this
 // scale (tens of candidates) the narrowed scan is trivial. If it grows, store
 // a normalized key on the row and put a unique index on it.
-async function isDuplicate(venueName: string, session: string, startTimeIST: string, sourceUrl: string) {
-  // Cheapest check first: this page has already been ingested.
-  const sameSource = await prisma.candidate.findFirst({
-    where: { sourceUrl },
-    select: { id: true }
-  });
-  if (sameSource) return true;
-
+async function isDuplicate(venueName: string, session: string, startTimeIST: string) {
   const incoming = { venueName, startTimeIST };
   if (!normalizeKey(venueName)) return false;
 
@@ -235,6 +249,11 @@ async function main() {
 
   for (const item of uniqueUrls) {
     try {
+      if (await alreadyIngested(item.url)) {
+        console.log(`Skip (already ingested): ${item.url}`);
+        continue;
+      }
+
       console.log(`Fetching: ${item.url}`);
       const { title, text } = await fetchPageText(item.url);
 
@@ -271,7 +290,7 @@ async function main() {
 
         if (!venueName) continue;
 
-        const dup = await isDuplicate(venueName, session, startTimeIST, item.url);
+        const dup = await isDuplicate(venueName, session, startTimeIST);
         if (dup) continue;
 
         await prisma.candidate.create({
