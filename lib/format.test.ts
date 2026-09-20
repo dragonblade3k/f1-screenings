@@ -112,17 +112,67 @@ describe("clean", () => {
 });
 
 describe("formatWhen", () => {
+  // Every case below is rendered in IST on purpose. These listings are for
+  // Mumbai, Thane and Navi Mumbai, and DEPLOY.md puts the app on Vercel,
+  // which runs UTC. Reading the runtime zone instead of IST is how a
+  // screening ends up advertised on the wrong evening.
+  const inZone = (tz: string, raw: string) => {
+    const before = process.env.TZ;
+    process.env.TZ = tz;
+    try {
+      return formatWhen(raw);
+    } finally {
+      process.env.TZ = before;
+    }
+  };
+
   it("returns null when there is no time at all", () => {
     expect(formatWhen("")).toBeNull();
   });
 
-  // Asserting exact output would bind the test to the runner's timezone and
-  // ICU data, so this checks the contract: a parseable date yields both parts.
   it("splits a parseable timestamp into day and time", () => {
     const r = formatWhen("2026-03-15T18:30:00+05:30");
     expect(r).not.toBeNull();
     expect(r!.day).not.toBe("");
     expect(r!.time).not.toBe("");
+  });
+
+  it("renders the IST wall clock, not the server's", () => {
+    const r = inZone("UTC", "2026-03-08T22:30:00+05:30");
+    expect(r!.day).toContain("8 Mar");
+    expect(r!.time).toContain("10:30");
+  });
+
+  // The case that motivated pinning the zone. A screening just after
+  // midnight IST is five and a half hours earlier in UTC, which lands on the
+  // previous calendar day: this rendered as Saturday evening on a deployed
+  // server while showing correctly on a laptop in India.
+  it("keeps a past-midnight screening on its own day", () => {
+    const r = inZone("UTC", "2026-03-15T00:30:00+05:30");
+    expect(r!.day).toContain("15 Mar");
+    expect(r!.day).toContain("Sun");
+    expect(r!.time).toContain("12:30");
+  });
+
+  // startTimeIST without an offset still means IST. ECMAScript would read it
+  // as the runtime's local time, so it needs the offset supplied.
+  it("reads an offsetless timestamp as IST rather than server local", () => {
+    const r = inZone("UTC", "2026-03-15T18:30:00");
+    expect(r!.day).toContain("15 Mar");
+    expect(r!.time).toContain("6:30");
+  });
+
+  it("gives the same answer whatever zone the process runs in", () => {
+    for (const raw of [
+      "2026-03-08T22:30:00+05:30",
+      "2026-03-15T00:30:00+05:30",
+      "2026-03-15T18:30:00",
+      "2026-03-15T13:00:00Z"
+    ]) {
+      const ist = inZone("Asia/Kolkata", raw);
+      expect(inZone("UTC", raw)).toEqual(ist);
+      expect(inZone("America/New_York", raw)).toEqual(ist);
+    }
   });
 
   it("echoes unparseable text instead of rendering Invalid Date", () => {
