@@ -64,16 +64,38 @@ export function sessionLabel(s: string): string {
   }
 }
 
+// Every screening listed here happens in Mumbai, Thane or Navi Mumbai, so
+// every stored time means IST no matter where the process runs. Both the
+// parsing and the rendering have to say so explicitly.
+const IST = "Asia/Kolkata";
+const IST_OFFSET = "+05:30";
+
+// A trailing Z or +/-HH:MM on an ISO 8601 timestamp.
+const HAS_OFFSET = /(?:Z|[+-]\d{2}:?\d{2})$/i;
+// A date and a wall clock reading, which is the form that has to be pinned.
+// A date with no time is left alone: the spec reads it as UTC, and shifting
+// it into IST moves it to 05:30 the same morning, which still prints the
+// right day.
+const HAS_CLOCK = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
+
+// ECMAScript reads a date-time carrying no offset as the runtime's local
+// time, which on a UTC host is five and a half hours off from what the
+// column name promises. Read it as the IST wall clock it is.
+function toInstant(raw: string): Date {
+  const s = raw.trim();
+  return new Date(HAS_CLOCK.test(s) && !HAS_OFFSET.test(s) ? s + IST_OFFSET : s);
+}
+
 // startTimeIST is stored as a loose string (ISO preferred, but ingestion
 // cannot guarantee it). Format when it parses, fall back to the raw text
 // when it does not, rather than showing an "Invalid Date".
 export function formatWhen(raw: string): { day: string; time: string } | null {
   if (!raw) return null;
-  const d = new Date(raw);
+  const d = toInstant(raw);
   if (isNaN(d.getTime())) return { day: raw, time: "" };
   return {
-    day: d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" }),
-    time: d.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true })
+    day: d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", timeZone: IST }),
+    time: d.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: IST })
   };
 }
 
