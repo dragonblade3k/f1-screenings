@@ -39,6 +39,7 @@ app/
   api/admin/
     approve/route.ts             Candidate -> VERIFIED + create Event
     update-and-approve/route.ts  edit fields, then the same
+    reject/route.ts              PENDING Candidate -> REJECTED, row kept
     manual-create/route.ts       create an Event directly
     _token.ts                    token constant
 lib/
