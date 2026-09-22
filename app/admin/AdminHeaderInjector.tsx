@@ -26,6 +26,16 @@ export default function AdminHeaderInjector() {
         body: fd
       });
 
+      // Every admin handler redirects on success. Anything else is a failure
+      // (bad token, missing candidate, a route that does not exist) and has to
+      // be shown, not answered with a reload that makes it look like nothing
+      // happened.
+      if (!res.ok) {
+        const detail = (await res.text()).slice(0, 300);
+        alert(`Request failed (${res.status}): ${detail || res.statusText}`);
+        return;
+      }
+
       if (res.redirected) window.location.href = res.url;
       else window.location.reload();
     };
