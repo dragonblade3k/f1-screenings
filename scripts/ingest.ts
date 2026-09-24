@@ -2,6 +2,7 @@ import "dotenv/config";
 import * as cheerio from "cheerio";
 import { prisma } from "@/lib/prisma.js";
 import { isSameEvent, normalizeKey } from "@/lib/dedupe.js";
+import { normalizeConfidence } from "@/lib/confidence.js";
 
 
 const OLLAMA_URL = process.env.OLLAMA_URL || "http://localhost:11434";
@@ -296,7 +297,7 @@ async function main() {
         await prisma.candidate.create({
           data: {
             status: "PENDING",
-            confidence: Number(e.confidence || 0.3),
+            confidence: normalizeConfidence(e.confidence),
             sport: "F1",
             area: String(e.area || "UNKNOWN") as any,
             locality: String(e.locality || ""),

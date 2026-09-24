@@ -44,6 +44,8 @@ app/
     _token.ts                    token constant
 lib/
   format.ts                      display helpers, defensive (see invariant 4)
+  dedupe.ts                      isSameEvent, the pure duplicate rule
+  confidence.ts                  normalizeConfidence, the pure score rule
   admin.ts                       requireAdmin(req)
   prisma.ts                      client singleton
 scripts/
@@ -78,8 +80,9 @@ npm test                 # vitest, pure units only
 
 ## Testing
 
-`npm test` runs vitest against `lib/format.test.ts` and `lib/dedupe.test.ts`
-(33 cases). Both cover pure functions, so they need no database and no Ollama.
+`npm test` runs vitest against `lib/format.test.ts`, `lib/dedupe.test.ts` and
+`lib/confidence.test.ts` (43 cases). All cover pure functions, so they need no
+database and no Ollama.
 CI runs `npx prisma generate`, `npm run typecheck`, then `npm test` on every
 pull request and every push to `main`.
 
