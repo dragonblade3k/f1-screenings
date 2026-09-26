@@ -81,7 +81,7 @@ npm test                 # vitest, pure units only
 ## Testing
 
 `npm test` runs vitest against `lib/format.test.ts`, `lib/dedupe.test.ts` and
-`lib/confidence.test.ts` (43 cases). All cover pure functions, so they need no
+`lib/confidence.test.ts` (49 cases). All cover pure functions, so they need no
 database and no Ollama.
 CI runs `npx prisma generate`, `npm run typecheck`, then `npm test` on every
 pull request and every push to `main`.

@@ -5,7 +5,8 @@ import {
   sessionLabel,
   formatWhen,
   clean,
-  formatPrice
+  formatPrice,
+  externalUrl
 } from "./format";
 
 // These helpers exist because early ingest runs, before decoding was
@@ -192,5 +193,49 @@ describe("formatPrice", () => {
     expect(r.free).toBe(false);
     expect(r.text).toContain("₹");
     expect(r.text).toContain("1,500");
+  });
+});
+
+describe("externalUrl", () => {
+  it("passes a real http or https address through", () => {
+    expect(externalUrl("https://www.zomato.com/mumbai/book")).toBe("https://www.zomato.com/mumbai/book");
+    expect(externalUrl("http://doolally.in/f1")).toBe("http://doolally.in/f1");
+  });
+
+  it("supplies the scheme the page never printed", () => {
+    expect(externalUrl("www.doolally.in/book")).toBe("https://www.doolally.in/book");
+    expect(externalUrl("doolally.in")).toBe("https://doolally.in/");
+  });
+
+  it("drops the placeholders the extractor writes for a missing field", () => {
+    expect(externalUrl("string")).toBeNull();
+    expect(externalUrl("undefined")).toBeNull();
+    expect(externalUrl("n/a")).toBeNull();
+    expect(externalUrl("")).toBeNull();
+    expect(externalUrl(null)).toBeNull();
+  });
+
+  it("drops prose, which would otherwise resolve against the current page", () => {
+    expect(externalUrl("TBD")).toBeNull();
+    expect(externalUrl("Call 98765 43210 to book")).toBeNull();
+    expect(externalUrl("walk-ins")).toBeNull();
+  });
+
+  it("rejects any scheme other than http and https", () => {
+    expect(externalUrl("javascript:alert(document.cookie)")).toBeNull();
+    expect(externalUrl("data:text/html,<script>1</script>")).toBeNull();
+    expect(externalUrl("mailto:bookings@doolally.in")).toBeNull();
+    expect(externalUrl("ftp://doolally.in/menu")).toBeNull();
+  });
+
+  it("never returns a value a browser would read as relative", () => {
+    const inputs = [
+      "https://www.zomato.com/book", "www.doolally.in/book", "doolally.in",
+      "string", "TBD", "javascript:alert(1)", "/admin/inbox", "book/now", ""
+    ];
+    for (const raw of inputs) {
+      const href = externalUrl(raw);
+      if (href !== null) expect(href).toMatch(/^https?:\/\/[^/]+\./);
+    }
   });
 });
