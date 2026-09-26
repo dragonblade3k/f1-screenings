@@ -5,7 +5,8 @@ import {
   sessionLabel,
   formatWhen,
   formatPrice,
-  clean
+  clean,
+  externalUrl
 } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -29,6 +30,11 @@ export default async function EventDetail({ params }: { params: { id: string } }
   const address = clean(e.address);
   const notes = clean(e.notes);
   const contact = clean(e.contact);
+  // Both of these are free text on the row, so neither is a usable href until
+  // it has been checked. A rejected value means no link at all: a "Book a
+  // table" button that goes nowhere is worse than no button.
+  const bookingUrl = externalUrl(e.bookingUrl);
+  const sourceUrl = externalUrl(e.sourceUrl);
   const mapsQ = encodeURIComponent(`${e.venueName} ${address} ${areaLabel(e.area)}`);
 
   return (
@@ -72,8 +78,8 @@ export default async function EventDetail({ params }: { params: { id: string } }
       ) : null}
 
       <div className="btn-row">
-        {e.bookingUrl ? (
-          <a className="btn primary" href={e.bookingUrl} target="_blank" rel="noopener noreferrer">
+        {bookingUrl ? (
+          <a className="btn primary" href={bookingUrl} target="_blank" rel="noopener noreferrer">
             Book a table
           </a>
         ) : null}
@@ -85,8 +91,8 @@ export default async function EventDetail({ params }: { params: { id: string } }
         >
           Open in Maps
         </a>
-        {e.sourceUrl ? (
-          <a className="btn ghost" href={e.sourceUrl} target="_blank" rel="noopener noreferrer">
+        {sourceUrl ? (
+          <a className="btn ghost" href={sourceUrl} target="_blank" rel="noopener noreferrer">
             Original listing
           </a>
         ) : null}

@@ -113,3 +113,49 @@ export function formatPrice(p: number): { text: string; free: boolean } {
   if (!p || p <= 0) return { text: "Free entry", free: true };
   return { text: `₹${p.toLocaleString("en-IN")}`, free: false };
 }
+
+// Links are the one extracted field with no protection at all. `bookingUrl` is
+// whatever the model read off the page and its EVENT_SCHEMA entry is a plain
+// `type: "string"`, so constraining decoding buys nothing here the way an enum
+// does for area and session. A value only has to be non-empty for a page to
+// render a link, and three kinds of non-address arrive often enough to matter:
+// the placeholders the JUNK set above already knows about, prose like "TBD",
+// and a real address written without its scheme, "www.doolally.in/book". The
+// last one is not an absolute URL, so a browser resolves it against the page it
+// is on and a booking button lands on /events/<id>/www.doolally.in/book. A
+// `javascript:` value would be absolute and would run in this site's origin.
+//
+// A host has at least one dot, which is what separates an address from a word.
+const LINKABLE_HOST = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/i;
+const HAS_SCHEME = /^[a-z][a-z0-9+.-]*:/i;
+
+function asHttpUrl(candidate: string): string | null {
+  let u: URL;
+  try {
+    u = new URL(candidate);
+  } catch {
+    return null;
+  }
+  if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+  return LINKABLE_HOST.test(u.hostname) ? u.href : null;
+}
+
+/**
+ * The href to render for an extracted link, or null when there is nothing worth
+ * linking to, in which case the page should omit the link entirely rather than
+ * render a button that goes nowhere.
+ *
+ * Only http and https survive. A value carrying any other scheme is rejected
+ * outright instead of being rewritten, because a `javascript:` or `data:` href
+ * is the model handing the page something to execute, not an address.
+ *
+ * A scheme-less host is upgraded to https. That is the one guess made here, and
+ * it is made because the intent is unambiguous: "www.doolally.in/book" is an
+ * address whose scheme the page never printed. Prose is not, so anything with
+ * whitespace, and anything whose host is a bare word with no dot, is dropped.
+ */
+export function externalUrl(raw: string | null | undefined): string | null {
+  const v = clean(raw);
+  if (!v || /\s/.test(v)) return null;
+  return HAS_SCHEME.test(v) ? asHttpUrl(v) : asHttpUrl("https://" + v);
+}
