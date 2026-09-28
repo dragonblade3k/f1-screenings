@@ -1,5 +1,10 @@
 import AdminHeaderInjector from "@/app/admin/AdminHeaderInjector";
+import { notFound } from "next/navigation";
+import { isPublicOnly } from "@/lib/deployment";
 export default function ManualEntry() {
+  // Not served by the public deployment; see lib/deployment.ts.
+  if (isPublicOnly()) notFound();
+
   return (
     <div style={{ maxWidth: 720 }}>
       <h2 style={{ marginTop: 0 }}>Manual entry (creates VERIFIED event)</h2>

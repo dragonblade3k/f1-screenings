@@ -9,9 +9,11 @@ describe("normalizePriceINR", () => {
     expect(normalizePriceINR("1500")).toBe(1500);
   });
 
-  it("keeps a free event free", () => {
+  it("keeps a free event free, and distinct from unknown", () => {
+    // 0 and null are different answers now: free versus unreadable.
     expect(normalizePriceINR(0)).toBe(0);
     expect(normalizePriceINR("0")).toBe(0);
+    expect(normalizePriceINR("")).toBeNull();
   });
 
   it("rounds a fraction rather than refusing the row", () => {
@@ -36,39 +38,45 @@ describe("normalizePriceINR", () => {
   });
 
   it("refuses a number buried in prose, which parseInt used to accept", () => {
-    expect(normalizePriceINR("1500 people attended")).toBe(0);
-    expect(normalizePriceINR("1500-2000")).toBe(0);
-    expect(normalizePriceINR("two thousand")).toBe(0);
-    expect(normalizePriceINR("TBD")).toBe(0);
-    expect(normalizePriceINR("free")).toBe(0);
-    expect(normalizePriceINR("")).toBe(0);
+    expect(normalizePriceINR("1500 people attended")).toBeNull();
+    expect(normalizePriceINR("1500-2000")).toBeNull();
+    expect(normalizePriceINR("two thousand")).toBeNull();
+    expect(normalizePriceINR("TBD")).toBeNull();
+    expect(normalizePriceINR("free")).toBeNull();
   });
 
   it("refuses a negative price rather than storing one", () => {
-    expect(normalizePriceINR(-200)).toBe(0);
-    expect(normalizePriceINR("-200")).toBe(0);
+    expect(normalizePriceINR(-200)).toBeNull();
+    expect(normalizePriceINR("-200")).toBeNull();
   });
 
   it("refuses a value the Int column cannot hold", () => {
     expect(normalizePriceINR(MAX_INT32)).toBe(MAX_INT32);
-    expect(normalizePriceINR(MAX_INT32 + 1)).toBe(0);
-    expect(normalizePriceINR(1e12)).toBe(0);
-    expect(normalizePriceINR(Infinity)).toBe(0);
-    expect(normalizePriceINR(NaN)).toBe(0);
+    expect(normalizePriceINR(MAX_INT32 + 1)).toBeNull();
+    expect(normalizePriceINR(1e12)).toBeNull();
+    expect(normalizePriceINR(Infinity)).toBeNull();
+    expect(normalizePriceINR(NaN)).toBeNull();
   });
 
   it("refuses anything that is not a number or a string", () => {
     // Number(true) is 1, which would have published a one rupee ticket.
-    expect(normalizePriceINR(true)).toBe(0);
-    expect(normalizePriceINR(false)).toBe(0);
-    expect(normalizePriceINR(null)).toBe(0);
-    expect(normalizePriceINR(undefined)).toBe(0);
-    expect(normalizePriceINR([])).toBe(0);
-    expect(normalizePriceINR([1500])).toBe(0);
-    expect(normalizePriceINR({})).toBe(0);
+    expect(normalizePriceINR(true)).toBeNull();
+    expect(normalizePriceINR(false)).toBeNull();
+    expect(normalizePriceINR(null)).toBeNull();
+    expect(normalizePriceINR(undefined)).toBeNull();
+    expect(normalizePriceINR([])).toBeNull();
+    expect(normalizePriceINR([1500])).toBeNull();
+    expect(normalizePriceINR({})).toBeNull();
   });
 
-  it("only ever returns something the column can store", () => {
+  it("never reports an unreadable price as free", () => {
+    // The whole point of the null: 0 is a claim, and these are not it.
+    for (const v of ["TBD", "", "  ", "abc", -1, NaN, true, {}, [], null]) {
+      expect(normalizePriceINR(v)).not.toBe(0);
+    }
+  });
+
+  it("only ever returns null or something the column can store", () => {
     const inputs: unknown[] = [
       1500, 499.5, -1, 0, "0x10", "1e3", "₹", "1,50,0.5", "Infinity",
       Infinity, -Infinity, NaN, 2 ** 40, true, null, undefined, [], {}, "",
@@ -76,6 +84,7 @@ describe("normalizePriceINR", () => {
     ];
     for (const v of inputs) {
       const n = normalizePriceINR(v);
+      if (n === null) continue;
       expect(Number.isInteger(n)).toBe(true);
       expect(n).toBeGreaterThanOrEqual(0);
       expect(n).toBeLessThanOrEqual(MAX_INT32);

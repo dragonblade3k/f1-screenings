@@ -89,10 +89,22 @@ function toInstant(raw: string): Date {
 // startTimeIST is stored as a loose string (ISO preferred, but ingestion
 // cannot guarantee it). Format when it parses, fall back to the raw text
 // when it does not, rather than showing an "Invalid Date".
+/**
+ * The instant a loose startTimeIST string denotes, or null when it does not
+ * parse. This is what fills the sortable `startsAt` column: the text column
+ * keeps whatever the model wrote, and ordering uses this.
+ */
+export function parseISTInstant(raw: string | null | undefined): Date | null {
+  const s = (raw ?? "").trim();
+  if (!s) return null;
+  const d = toInstant(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
 export function formatWhen(raw: string): { day: string; time: string } | null {
   if (!raw) return null;
-  const d = toInstant(raw);
-  if (isNaN(d.getTime())) return { day: raw, time: "" };
+  const d = parseISTInstant(raw);
+  if (!d) return { day: raw, time: "" };
   return {
     day: d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", timeZone: IST }),
     time: d.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: IST })
@@ -109,9 +121,20 @@ export function clean(raw: string | null | undefined): string {
   return JUNK.has(v.toLowerCase()) ? "" : v;
 }
 
-export function formatPrice(p: number): { text: string; free: boolean } {
-  if (!p || p <= 0) return { text: "Free entry", free: true };
-  return { text: `₹${p.toLocaleString("en-IN")}`, free: false };
+// Three outcomes, not two. A null price means nobody could read one off the
+// source page, and saying "Free entry" about it is a claim the data does not
+// support. `known` lets a caller style an unknown price differently from a
+// genuinely free one. Still defensive per invariant 4: a negative cannot come
+// from `normalizePriceINR` any more, but it is treated as unknown rather than
+// free if one ever appears.
+export function formatPrice(
+  p: number | null | undefined
+): { text: string; free: boolean; known: boolean } {
+  if (p === null || p === undefined || !Number.isFinite(p) || p < 0) {
+    return { text: "Price not listed", free: false, known: false };
+  }
+  if (p === 0) return { text: "Free entry", free: true, known: true };
+  return { text: `₹${p.toLocaleString("en-IN")}`, free: false, known: true };
 }
 
 // Links are the one extracted field with no protection at all. `bookingUrl` is

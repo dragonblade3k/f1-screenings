@@ -1,10 +1,15 @@
 import { prisma } from "@/lib/prisma";
+import { notFound } from "next/navigation";
+import { isPublicOnly } from "@/lib/deployment";
 import AdminHeaderInjector from "@/app/admin/AdminHeaderInjector";
 import { areaLabel, sessionKind, sessionLabel, formatWhen, formatPrice, clean } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminInbox() {
+  // Not served by the public deployment; see lib/deployment.ts.
+  if (isPublicOnly()) notFound();
+
   const pending = await prisma.candidate.findMany({
     where: { status: "PENDING" },
     orderBy: { createdAt: "desc" }

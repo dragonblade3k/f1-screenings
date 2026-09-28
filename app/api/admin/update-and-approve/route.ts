@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
 import { normalizePriceINR } from "@/lib/price";
+import { parseISTInstant } from "@/lib/format";
 
 export async function POST(req: Request) {
   const auth = requireAdmin(req);
@@ -22,64 +23,56 @@ export async function POST(req: Request) {
     notes: String(form.get("notes") || "")
   };
 
-  const updated = await prisma.candidate.update({
-    where: { id },
-    data: {
-      venueName: data.venueName,
-      // enums are stored as strings; Prisma will throw if invalid.
-      area: data.area as any,
-      locality: data.locality,
-      address: data.address,
-      session: data.session as any,
-      startTimeIST: data.startTimeIST,
-      priceINR: data.priceINR,
-      bookingUrl: data.bookingUrl,
-      contact: data.contact,
-      notes: data.notes,
-      status: "VERIFIED",
-      verifiedAt: new Date()
+  const startsAt = parseISTInstant(data.startTimeIST);
+
+  // Invariant 3: the status change and the Event write are one unit. This route
+  // used to do them as three separate calls, so a failure between them left a
+  // candidate marked VERIFIED with nothing published, which is the state the
+  // invariant exists to make impossible.
+  await prisma.$transaction(async (tx) => {
+    const updated = await tx.candidate.update({
+      where: { id },
+      data: {
+        venueName: data.venueName,
+        // enums are stored as strings; Prisma will throw if invalid.
+        area: data.area as any,
+        locality: data.locality,
+        address: data.address,
+        session: data.session as any,
+        startTimeIST: data.startTimeIST,
+        startsAt,
+        priceINR: data.priceINR,
+        bookingUrl: data.bookingUrl,
+        contact: data.contact,
+        notes: data.notes,
+        status: "VERIFIED",
+        verifiedAt: new Date()
+      }
+    });
+
+    const fields = {
+      sport: updated.sport,
+      area: updated.area,
+      locality: updated.locality,
+      venueName: updated.venueName || "(unknown venue)",
+      address: updated.address,
+      session: updated.session,
+      startTimeIST: updated.startTimeIST,
+      startsAt: updated.startsAt,
+      priceINR: updated.priceINR,
+      bookingUrl: updated.bookingUrl,
+      contact: updated.contact,
+      notes: updated.notes,
+      sourceUrl: updated.sourceUrl
+    };
+
+    const existing = await tx.event.findFirst({ where: { candidateId: id } });
+    if (existing) {
+      await tx.event.update({ where: { id: existing.id }, data: fields });
+    } else {
+      await tx.event.create({ data: { candidateId: id, ...fields } });
     }
   });
-
-  // Upsert Event
-  const existing = await prisma.event.findFirst({ where: { candidateId: id } });
-  if (existing) {
-    await prisma.event.update({
-      where: { id: existing.id },
-      data: {
-        sport: updated.sport,
-        area: updated.area,
-        locality: updated.locality,
-        venueName: updated.venueName || "(unknown venue)",
-        address: updated.address,
-        session: updated.session,
-        startTimeIST: updated.startTimeIST,
-        priceINR: updated.priceINR,
-        bookingUrl: updated.bookingUrl,
-        contact: updated.contact,
-        notes: updated.notes,
-        sourceUrl: updated.sourceUrl
-      }
-    });
-  } else {
-    await prisma.event.create({
-      data: {
-        candidateId: id,
-        sport: updated.sport,
-        area: updated.area,
-        locality: updated.locality,
-        venueName: updated.venueName || "(unknown venue)",
-        address: updated.address,
-        session: updated.session,
-        startTimeIST: updated.startTimeIST,
-        priceINR: updated.priceINR,
-        bookingUrl: updated.bookingUrl,
-        contact: updated.contact,
-        notes: updated.notes,
-        sourceUrl: updated.sourceUrl
-      }
-    });
-  }
 
   return Response.redirect(new URL("/", req.url));
 }
