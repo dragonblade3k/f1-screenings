@@ -2,8 +2,11 @@ name: CI
 
 on:
   pull_request:
+  # Every branch, not just main. A change that cannot be verified locally (this
+  # network blocks binaries.prisma.sh, so the Prisma CLI does not run) has to be
+  # provable green before it is merged, and waiting for the push to main to find
+  # out is the wrong order.
   push:
-    branches: [main]
 
 jobs:
   check:
