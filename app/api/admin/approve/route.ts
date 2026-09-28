@@ -30,6 +30,7 @@ export async function POST(req: Request) {
           address: c.address,
           session: c.session,
           startTimeIST: c.startTimeIST,
+          startsAt: c.startsAt,
           priceINR: c.priceINR,
           bookingUrl: c.bookingUrl,
           contact: c.contact,

@@ -1,7 +1,12 @@
 import { prisma } from "@/lib/prisma";
+import { notFound } from "next/navigation";
+import { isPublicOnly } from "@/lib/deployment";
 import AdminHeaderInjector from "@/app/admin/AdminHeaderInjector";
 
 export default async function EditCandidate({ params }: { params: { id: string } }) {
+  // Not served by the public deployment; see lib/deployment.ts.
+  if (isPublicOnly()) notFound();
+
   const c = await prisma.candidate.findUnique({ where: { id: params.id } });
   if (!c) return <div>Not found.</div>;
 
@@ -44,7 +49,7 @@ export default async function EditCandidate({ params }: { params: { id: string }
 
         <label>
           Price INR
-          <input name="priceINR" defaultValue={String(c.priceINR)} style={{ width: "100%" }} />
+          <input name="priceINR" defaultValue={c.priceINR ?? ""} style={{ width: "100%" }} />
         </label>
 
         <label>

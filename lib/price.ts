@@ -33,30 +33,29 @@ const PRICE_TEXT =
   /^(?:₹|rs\.?|inr)?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:₹|rs\.?|inr)?$/i;
 
 /**
- * The rupee price to store, or 0 when there is no usable number.
+ * The rupee price to store, or null when there is no usable number.
  *
- * A value counts when it reads as a single non-negative number that the column
- * can hold. A fraction is rounded to the nearest rupee, because the alternative
- * is 0 and 0 does not mean "unknown" on the public page, it renders as "Free
- * entry": turning ₹499.50 into "Free entry" is a worse answer than ₹500, and
- * rounding restores a unit the column cannot carry rather than inventing a
- * judgement the writer never made.
+ * null and 0 are different answers and the column now holds both: 0 is "this
+ * screening is free", null is "nobody could read a price off the page". They
+ * used to collapse into 0, so every unreadable price was published as "Free
+ * entry" on a public listing.
  *
- * Everything else is 0. A negative price has no correct reading, a boolean is
- * not a price however readily `Number` turns it into 1, and prose is not a
- * price. Note that 0 is where both "free" and "we could not tell" land, which
- * the schema comment has always conflated; see the note in CLAUDE.md.
+ * A value counts when it reads as a single non-negative number the column can
+ * hold. A fraction is rounded to the nearest rupee, because the value is real
+ * and only its unit is unrepresentable. Everything else is null: a negative
+ * price has no correct reading, a boolean is not a price however readily
+ * `Number` turns it into 1, and prose is not a price.
  */
-export function normalizePriceINR(raw: unknown): number {
+export function normalizePriceINR(raw: unknown): number | null {
   if (typeof raw === "number") return fromNumber(raw);
-  if (typeof raw !== "string") return 0;
+  if (typeof raw !== "string") return null;
 
   const m = PRICE_TEXT.exec(raw.trim());
-  return m ? fromNumber(Number(m[1].replace(/,/g, ""))) : 0;
+  return m ? fromNumber(Number(m[1].replace(/,/g, ""))) : null;
 }
 
-function fromNumber(n: number): number {
-  if (!Number.isFinite(n) || n < 0) return 0;
+function fromNumber(n: number): number | null {
+  if (!Number.isFinite(n) || n < 0) return null;
   const rupees = Math.round(n);
-  return rupees > MAX_INT32 ? 0 : rupees;
+  return rupees > MAX_INT32 ? null : rupees;
 }

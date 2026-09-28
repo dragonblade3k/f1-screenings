@@ -6,6 +6,7 @@ import {
   formatWhen,
   clean,
   formatPrice,
+  parseISTInstant,
   externalUrl
 } from "./format";
 
@@ -183,9 +184,19 @@ describe("formatWhen", () => {
 });
 
 describe("formatPrice", () => {
-  it("treats zero and missing as free entry", () => {
-    expect(formatPrice(0)).toEqual({ text: "Free entry", free: true });
-    expect(formatPrice(-1).free).toBe(true);
+  it("treats zero as free entry", () => {
+    expect(formatPrice(0)).toEqual({ text: "Free entry", free: true, known: true });
+  });
+
+  it("reports an absent price as not listed, never as free", () => {
+    // These used to all render "Free entry", which claimed something about a
+    // real venue that the data never said.
+    for (const v of [null, undefined, -1, NaN]) {
+      const r = formatPrice(v as any);
+      expect(r.free).toBe(false);
+      expect(r.known).toBe(false);
+      expect(r.text).toBe("Price not listed");
+    }
   });
 
   it("formats a real price in rupees", () => {
@@ -237,5 +248,33 @@ describe("externalUrl", () => {
       const href = externalUrl(raw);
       if (href !== null) expect(href).toMatch(/^https?:\/\/[^/]+\./);
     }
+  });
+});
+
+describe("parseISTInstant", () => {
+  it("reads a bare date-time as the IST wall clock it claims to be", () => {
+    const d = parseISTInstant("2026-03-15T20:00");
+    expect(d).not.toBeNull();
+    // 20:00 IST is 14:30 UTC.
+    expect(d!.toISOString()).toBe("2026-03-15T14:30:00.000Z");
+  });
+
+  it("respects an explicit offset instead of re-pinning it", () => {
+    const d = parseISTInstant("2026-03-15T20:00:00Z");
+    expect(d!.toISOString()).toBe("2026-03-15T20:00:00.000Z");
+  });
+
+  it("is null for the free text the column also holds", () => {
+    for (const v of ["", "   ", "Sunday evening", "TBD", null, undefined]) {
+      expect(parseISTInstant(v as any)).toBeNull();
+    }
+  });
+
+  it("orders correctly across the formats the old string sort got wrong", () => {
+    // Lexicographically "8 PM" sorts before "2026-...", which is why the
+    // listing needed a real instant to order on.
+    const a = parseISTInstant("2026-03-15T20:00")!;
+    const b = parseISTInstant("2026-03-16T09:00")!;
+    expect(a.getTime()).toBeLessThan(b.getTime());
   });
 });

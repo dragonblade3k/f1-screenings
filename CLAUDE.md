@@ -25,6 +25,15 @@ project is and why it is built this way.
    area or session labels locally. The helpers there are intentionally defensive
    about malformed values because pre-fix rows are still in the database.
 
+5. **The public deployment serves read paths only.** `PUBLIC_ONLY=1` is set in
+   the hosted environment. `requireAdmin` refuses with 404 when it is set, and
+   the three `/admin` pages call `notFound()`. This is not cosmetic: those pages
+   are server components that query Prisma and render candidate rows, and only
+   the `api/admin` routes ever checked a token, so without the gate anyone
+   visiting `/admin/inbox` on the public URL could read the whole unreviewed
+   queue including every page's `rawText`. Ingestion needs SerpAPI and a local
+   Ollama and curation needs a human, so neither was ever going to run there.
+
 ## Layout
 
 ```
@@ -46,6 +55,7 @@ lib/
   format.ts                      display helpers, defensive (see invariant 4)
   dedupe.ts                      isSameEvent, the pure duplicate rule
   confidence.ts                  normalizeConfidence, the pure score rule
+  deployment.ts                  isPublicOnly(), which surfaces this process serves
   price.ts                       normalizePriceINR, the pure rupee rule
   admin.ts                       requireAdmin(req)
   prisma.ts                      client singleton
@@ -57,11 +67,23 @@ prisma/
 
 ## Conventions
 
-- **Status and enum fields are plain strings**, not TypeScript enums. SQLite has
-  no native enum and the values cross a model boundary. Legal values are
-  documented as comments in `schema.prisma` and enforced in `EVENT_SCHEMA`.
+- **Status and enum fields are plain strings**, not TypeScript enums. This began
+  as a SQLite limitation and is now a deliberate choice: the values cross a model
+  boundary, and a Postgres native enum would mean a migration every time the
+  extractor learns a new session type. Legal values are documented as comments in
+  `schema.prisma` and enforced by the `enum` arrays in `EVENT_SCHEMA`.
 - **Env-first config.** No hardcoded service URLs beyond defaults in
   `ingest.ts`. See `.env.example`.
+- **Postgres everywhere.** The datasource is `postgresql` for local development
+  and for the deployment, against the same hosted database. SQLite was dropped
+  when the app was deployed: keeping two providers meant the migration history
+  could only ever be correct for one of them.
+- **`priceINR` is nullable and `null` is not `0`.** `null` means no readable
+  price, `0` means free. `formatPrice` renders those as "Price not listed" and
+  "Free entry" and must keep them distinct.
+- **`startTimeIST` is raw text, `startsAt` is the instant.** The text column
+  keeps whatever the model wrote. Ordering and comparison use `startsAt`, filled
+  by `parseISTInstant`. Never sort on the text column.
 - **Server components fetch directly.** Pages read through Prisma on the server;
   there are no client-side data endpoints. Mutations are form POSTs to
   `api/admin/*`.
@@ -73,7 +95,7 @@ prisma/
 ```bash
 npm run dev              # localhost:3000
 npm run ingest           # needs SERPAPI_API_KEY and a running Ollama
-npm run prisma:migrate   # after editing schema.prisma
+npm run prisma:migrate   # after editing schema.prisma (writes to Postgres)
 npm run prisma:studio    # browse the database
 npx tsc --noEmit         # typecheck
 npm test                 # vitest, pure units only
@@ -82,7 +104,7 @@ npm test                 # vitest, pure units only
 ## Testing
 
 `npm test` runs vitest against `lib/format.test.ts`, `lib/dedupe.test.ts`,
-`lib/confidence.test.ts` and `lib/price.test.ts` (58 cases). All cover pure
+`lib/confidence.test.ts` and `lib/price.test.ts` (64 cases). All cover pure
 functions, so they need no database and no Ollama.
 CI runs `npx prisma generate`, `npm run typecheck`, then `npm test` on every
 pull request and every push to `main`.
@@ -97,10 +119,6 @@ is the pattern to follow rather than mocking Prisma.
 - Ingestion has no retry or backoff. A transient SerpAPI or Ollama failure drops
   that URL for the run; the next run picks it up again because nothing was
   written.
-- `priceINR` of 0 means both "free" and "we could not read a price". The schema
-  comment has always said "0 when free or unknown", and `formatPrice` renders 0
-  as "Free entry", so an unknown price is published as a free one. Telling them
-  apart needs a nullable column and a backfill, so it is not a read-path fix.
 - `isDuplicate()` loads every candidate for the session into memory on each
   extraction. Correct, and fine at the current row count, but it is a table scan
   per item rather than an indexed lookup.

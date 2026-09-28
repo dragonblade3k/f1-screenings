@@ -11,8 +11,15 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
+  // startTimeIST is free text in mixed formats, so ordering on it sorted
+  // lexicographically and put "8 PM Sunday" before "2026-03-15T20:00". Order on
+  // the parsed instant instead, with rows that never parsed last rather than
+  // first, and a stable tiebreak so equal times do not shuffle between loads.
   const events = await prisma.event.findMany({
-    orderBy: { startTimeIST: "asc" }
+    orderBy: [
+      { startsAt: { sort: "asc", nulls: "last" } },
+      { createdAt: "asc" }
+    ]
   });
 
   return (
@@ -33,8 +40,7 @@ export default async function HomePage() {
       {events.length === 0 ? (
         <div className="empty">
           <strong>No verified screenings yet</strong>
-          Run <code>npm run ingest</code> to pull candidates, then approve them in the{" "}
-          <a href="/admin/inbox" className="link-sm" style={{ textDecoration: "underline" }}>admin inbox</a>.
+          Listings appear here once a screening has been found and checked by a human.
         </div>
       ) : (
         <div className="card-grid">
@@ -62,7 +68,7 @@ export default async function HomePage() {
                       {locality ? <><span className="dot">·</span>{locality}</> : null}
                     </div>
                   </div>
-                  <div className={`price${price.free ? " free" : ""}`}>{price.text}</div>
+                  <div className={`price${price.free ? " free" : ""}${price.known ? "" : " unknown"}`}>{price.text}</div>
                 </div>
               </a>
             );

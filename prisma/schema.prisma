@@ -3,8 +3,12 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider = "postgresql"
+  // Pooled, used by the app at runtime.
+  url       = env("DATABASE_URL")
+  // Direct, used by `prisma migrate`, which cannot run through a transaction
+  // pooler. Both point at the same database.
+  directUrl = env("DIRECT_URL")
 }
 
 model Candidate {
@@ -26,8 +30,9 @@ model Candidate {
   // sessions: FP | QUALI | SPRINT | RACE | UNKNOWN
   session       String   @default("UNKNOWN")
 
-  startTimeIST  String   @default("") // ISO preferred
-  priceINR      Int      @default(0)
+  startTimeIST  String   @default("") // raw text, ISO preferred
+  startsAt      DateTime?      // parsed from startTimeIST; null when unparseable
+  priceINR      Int?     // null = no readable price; 0 = free
   bookingUrl    String   @default("")
   contact       String   @default("")
   notes         String   @default("")
@@ -56,7 +61,8 @@ model Event {
   address      String   @default("")
   session      String   @default("UNKNOWN")
   startTimeIST String   @default("")
-  priceINR     Int      @default(0)
+  startsAt     DateTime?
+  priceINR     Int?     // null = no readable price; 0 = free
   bookingUrl   String   @default("")
   contact      String   @default("")
   notes        String   @default("")
