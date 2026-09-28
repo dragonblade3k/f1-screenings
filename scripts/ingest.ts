@@ -3,6 +3,7 @@ import * as cheerio from "cheerio";
 import { prisma } from "@/lib/prisma.js";
 import { isSameEvent, normalizeKey } from "@/lib/dedupe.js";
 import { normalizeConfidence } from "@/lib/confidence.js";
+import { normalizePriceINR } from "@/lib/price.js";
 
 
 const OLLAMA_URL = process.env.OLLAMA_URL || "http://localhost:11434";
@@ -305,7 +306,7 @@ async function main() {
             address: String(e.address || ""),
             session: session as any,
             startTimeIST,
-            priceINR: Number.isFinite(Number(e.priceINR)) ? Number(e.priceINR) : 0,
+            priceINR: normalizePriceINR(e.priceINR),
             bookingUrl: String(e.bookingUrl || ""),
             contact: String(e.contact || ""),
             notes: String(e.notes || ""),

@@ -1,10 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
-
-function asInt(v: string, fallback = 0) {
-  const n = parseInt(v, 10);
-  return Number.isFinite(n) ? n : fallback;
-}
+import { normalizePriceINR } from "@/lib/price";
 
 export async function POST(req: Request) {
   const auth = requireAdmin(req);
@@ -20,7 +16,7 @@ export async function POST(req: Request) {
     address: String(form.get("address") || ""),
     session: String(form.get("session") || "UNKNOWN"),
     startTimeIST: String(form.get("startTimeIST") || ""),
-    priceINR: asInt(String(form.get("priceINR") || "0")),
+    priceINR: normalizePriceINR(form.get("priceINR")),
     bookingUrl: String(form.get("bookingUrl") || ""),
     contact: String(form.get("contact") || ""),
     notes: String(form.get("notes") || "")
