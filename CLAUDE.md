@@ -46,6 +46,7 @@ lib/
   format.ts                      display helpers, defensive (see invariant 4)
   dedupe.ts                      isSameEvent, the pure duplicate rule
   confidence.ts                  normalizeConfidence, the pure score rule
+  price.ts                       normalizePriceINR, the pure rupee rule
   admin.ts                       requireAdmin(req)
   prisma.ts                      client singleton
 scripts/
@@ -80,9 +81,9 @@ npm test                 # vitest, pure units only
 
 ## Testing
 
-`npm test` runs vitest against `lib/format.test.ts`, `lib/dedupe.test.ts` and
-`lib/confidence.test.ts` (49 cases). All cover pure functions, so they need no
-database and no Ollama.
+`npm test` runs vitest against `lib/format.test.ts`, `lib/dedupe.test.ts`,
+`lib/confidence.test.ts` and `lib/price.test.ts` (58 cases). All cover pure
+functions, so they need no database and no Ollama.
 CI runs `npx prisma generate`, `npm run typecheck`, then `npm test` on every
 pull request and every push to `main`.
 
@@ -96,6 +97,10 @@ is the pattern to follow rather than mocking Prisma.
 - Ingestion has no retry or backoff. A transient SerpAPI or Ollama failure drops
   that URL for the run; the next run picks it up again because nothing was
   written.
+- `priceINR` of 0 means both "free" and "we could not read a price". The schema
+  comment has always said "0 when free or unknown", and `formatPrice` renders 0
+  as "Free entry", so an unknown price is published as a free one. Telling them
+  apart needs a nullable column and a backfill, so it is not a read-path fix.
 - `isDuplicate()` loads every candidate for the session into memory on each
   extraction. Correct, and fine at the current row count, but it is a table scan
   per item rather than an indexed lookup.
