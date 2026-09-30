@@ -5,7 +5,7 @@ import { isSameEvent, normalizeKey } from "@/lib/dedupe.js";
 import { normalizeConfidence } from "@/lib/confidence.js";
 import { normalizePriceINR } from "@/lib/price.js";
 import { parseISTInstant } from "@/lib/format.js";
-
+import { EVENT_SCHEMA, extractionPrompt } from "@/lib/extraction.js";
 
 const OLLAMA_URL = process.env.OLLAMA_URL || "http://localhost:11434";
 const LLM_MODEL = process.env.LLM_MODEL || "llama3";
@@ -21,7 +21,6 @@ if (!SERPAPI_API_KEY) {
   console.error("Missing SERPAPI_API_KEY in .env");
   process.exit(1);
 }
-
 
 const QUERIES = [
   // broad
@@ -74,7 +73,6 @@ async function serpSearch(q: string, num = 10) {
   return res.json() as Promise<any>;
 }
 
-
 async function fetchPageText(url: string) {
   const res = await fetch(url, { redirect: "follow" });
   if (!res.ok) throw new Error(`Fetch failed ${res.status}: ${url}`);
@@ -89,66 +87,6 @@ async function fetchPageText(url: string) {
   // Keep it bounded for local models
   const trimmed = text.slice(0, 14000);
   return { title, text: trimmed };
-}
-
-// Ollama's `format` accepts a real JSON Schema and constrains decoding to it,
-// so the model structurally cannot emit a value outside an enum.
-//
-// The previous version passed format: "json" and described the shape inside
-// the prompt as "area": "MUMBAI|THANE|NAVI_MUMBAI|UNKNOWN", meaning "pick one".
-// format: "json" only guarantees the output parses, not that the values are
-// legal, and the model took the pseudo notation literally: rows in the
-// database still hold "MUMBAI|NAVI_MUMBAI" and "FP|QUALI|SPRINT|RACE|UNKNOWN"
-// as single string values, and the literal word "string" wherever the sample
-// showed "address": "string". Constraining decoding is what actually fixes it.
-const EVENT_SCHEMA = {
-  type: "object",
-  properties: {
-    events: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          sport: { type: "string", enum: ["F1"] },
-          area: { type: "string", enum: ["MUMBAI", "THANE", "NAVI_MUMBAI", "UNKNOWN"] },
-          locality: { type: "string" },
-          venueName: { type: "string" },
-          address: { type: "string" },
-          session: { type: "string", enum: ["FP", "QUALI", "SPRINT", "RACE", "UNKNOWN"] },
-          startTimeIST: { type: "string" },
-          priceINR: { type: "integer" },
-          bookingUrl: { type: "string" },
-          contact: { type: "string" },
-          notes: { type: "string" },
-          sourceUrl: { type: "string" },
-          confidence: { type: "number" }
-        },
-        required: ["area", "venueName", "session", "confidence"]
-      }
-    }
-  },
-  required: ["events"]
-} as const;
-
-function extractionPrompt(sourceUrl: string, title: string, pageText: string) {
-  return `
-You are extracting F1 screening events for the Mumbai Metro region ONLY (Mumbai, Thane, Navi Mumbai).
-
-Rules:
-- Include events only if they are clearly in Mumbai OR Thane OR Navi Mumbai (or localities within).
-- If the page contains no relevant F1 screening event, return an empty events array.
-- Choose exactly one area and exactly one session per event. Use UNKNOWN when unsure.
-- Leave a string field empty rather than inventing a value or echoing a placeholder.
-- startTimeIST: best effort ISO 8601 string, empty when unknown.
-- priceINR: integer, 0 when free or unknown.
-- confidence: 0.0 to 1.0, how sure you are this is a real F1 screening in the region.
-
-Source URL: ${sourceUrl}
-Title: ${title}
-
-Page text:
-${pageText}
-`.trim();
 }
 
 async function callOllama(prompt: string) {
