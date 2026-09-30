@@ -6,13 +6,14 @@ project is and why it is built this way.
 ## Invariants — do not regress these
 
 1. **Extraction decoding is schema-constrained.** `scripts/ingest.ts` passes
-   `EVENT_SCHEMA` (a real JSON Schema, with `enum` arrays) as Ollama's `format`.
+   `EVENT_SCHEMA` from `lib/extraction.ts` (a real JSON Schema, with `enum`
+   arrays) as Ollama's `format`.
    Do **not** change this back to `format: "json"` and describe the shape in the
    prompt. That was the original implementation and it produced malformed values
    in 73% of rows: `"MUMBAI|NAVI_MUMBAI"`, the literal string `"string"`,
    `"undefined"`. `format: "json"` guarantees the output parses, not that the
    values are legal. If a field needs a fixed set of values, put an `enum` in
-   `EVENT_SCHEMA`.
+   `EVENT_SCHEMA`. `lib/extraction.test.ts` pins this.
 
 2. **Nothing reaches the public pages without human approval.** Ingestion writes
    `Candidate` rows only. `Event` rows are created solely by the approve
@@ -56,6 +57,7 @@ lib/
   dedupe.ts                      isSameEvent, the pure duplicate rule
   confidence.ts                  normalizeConfidence, the pure score rule
   deployment.ts                  isPublicOnly(), which surfaces this process serves
+  extraction.ts                  EVENT_SCHEMA and the prompt, the model contract
   price.ts                       normalizePriceINR, the pure rupee rule
   admin.ts                       requireAdmin(req)
   prisma.ts                      client singleton
@@ -80,7 +82,11 @@ prisma/
   could only ever be correct for one of them.
 - **`priceINR` is nullable and `null` is not `0`.** `null` means no readable
   price, `0` means free. `formatPrice` renders those as "Price not listed" and
-  "Free entry" and must keep them distinct.
+  "Free entry" and must keep them distinct. Every write path has to keep them
+  distinct too: the extraction prompt asks for an omitted `priceINR` rather
+  than a 0 when a page states no price, and the manual form leaves the field
+  empty rather than pre-filling 0. Both said 0 until the column stopped being
+  able to.
 - **`startTimeIST` is raw text, `startsAt` is the instant.** The text column
   keeps whatever the model wrote. Ordering and comparison use `startsAt`, filled
   by `parseISTInstant`. Never sort on the text column.
@@ -104,13 +110,17 @@ npm test                 # vitest, pure units only
 ## Testing
 
 `npm test` runs vitest against `lib/format.test.ts`, `lib/dedupe.test.ts`,
-`lib/confidence.test.ts` and `lib/price.test.ts` (64 cases). All cover pure
+`lib/confidence.test.ts`, `lib/price.test.ts` and `lib/extraction.test.ts`
+(72 cases). All cover pure
 functions, so they need no database and no Ollama.
 CI runs `npx prisma generate`, `npm run typecheck`, then `npm test` on every
 pull request and every push to `main`.
 
 The untested surface is everything that touches I/O: `scripts/ingest.ts`,
-the `api/admin/*` handlers, and the server components. Extracting a pure
+the `api/admin/*` handlers, and the server components. `scripts/ingest.ts`
+cannot even be imported from a test, because it exits the process at module
+load when `SERPAPI_API_KEY` is unset and then runs a full ingest, which is why
+the extraction contract lives in `lib/` rather than beside its caller. Extracting a pure
 function and testing that, the way `isSameEvent` was pulled into `lib/dedupe.ts`,
 is the pattern to follow rather than mocking Prisma.
 

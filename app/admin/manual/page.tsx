@@ -40,9 +40,13 @@ export default function ManualEntry() {
           <input name="startTimeIST" placeholder="2026-03-08T22:30:00+05:30" style={{ width: "100%" }} />
         </label>
 
+        {/* Empty, not 0. priceINR is nullable and the two mean different
+            things: 0 publishes "Free entry", empty publishes "Price not
+            listed". Pre-filling 0 made every price the creator did not type
+            an advertised free entry. */}
         <label>
-          Price INR
-          <input name="priceINR" defaultValue="0" style={{ width: "100%" }} />
+          Price INR (leave empty if not listed)
+          <input name="priceINR" defaultValue="" placeholder="0 for free entry" style={{ width: "100%" }} />
         </label>
 
         <label>
