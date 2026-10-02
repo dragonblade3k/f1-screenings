@@ -88,8 +88,14 @@ prisma/
   empty rather than pre-filling 0. Both said 0 until the column stopped being
   able to.
 - **`startTimeIST` is raw text, `startsAt` is the instant.** The text column
-  keeps whatever the model wrote. Ordering and comparison use `startsAt`, filled
-  by `parseISTInstant`. Never sort on the text column.
+  keeps whatever the model wrote. Ordering uses `startsAt`, filled by
+  `parseISTInstant`. Never sort on the text column, and never compare two of
+  them as text either: the prompt asks only for a "best effort ISO 8601
+  string", so one moment has several legal spellings and `isSameEvent` missed
+  duplicates that differed only in spelling. Comparison goes through
+  `parseISTClockInstant`, which is `parseISTInstant` minus the bare-date case,
+  because a date with no time parses to 05:30 IST and would otherwise equal a
+  stated 05:30.
 - **Server components fetch directly.** Pages read through Prisma on the server;
   there are no client-side data endpoints. Mutations are form POSTs to
   `api/admin/*`.
@@ -111,7 +117,7 @@ npm test                 # vitest, pure units only
 
 `npm test` runs vitest against `lib/format.test.ts`, `lib/dedupe.test.ts`,
 `lib/confidence.test.ts`, `lib/price.test.ts` and `lib/extraction.test.ts`
-(72 cases). All cover pure
+(80 cases). All cover pure
 functions, so they need no database and no Ollama.
 CI runs `npx prisma generate`, `npm run typecheck`, then `npm test` on every
 pull request and every push to `main`.
