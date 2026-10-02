@@ -101,6 +101,27 @@ export function parseISTInstant(raw: string | null | undefined): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
+/**
+ * The instant a startTimeIST string denotes, but only when the string states a
+ * time of day. Null otherwise, including for a value that is a date alone.
+ *
+ * This exists for comparison rather than for ordering or display, which is why
+ * it is stricter than `parseISTInstant`. That one answers for every value it
+ * can read, a bare date included, which it takes as UTC midnight and so as
+ * 05:30 IST the same morning. That is the right answer for sorting, where a
+ * day with no time still has to land on its own day. It is the wrong answer
+ * for asking whether two extractions name the same moment: "2026-03-15" and
+ * "2026-03-15T05:30" come out as the identical instant while meaning different
+ * things, one a time nobody could read off the page and the other a time
+ * somebody wrote down. Requiring a clock reading on both sides keeps those
+ * apart, and leaves a comparison involving a bare date to fall back to the
+ * text, which is all it ever had to go on.
+ */
+export function parseISTClockInstant(raw: string | null | undefined): Date | null {
+  const s = (raw ?? "").trim();
+  return HAS_CLOCK.test(s) ? parseISTInstant(s) : null;
+}
+
 export function formatWhen(raw: string): { day: string; time: string } | null {
   if (!raw) return null;
   const d = parseISTInstant(raw);

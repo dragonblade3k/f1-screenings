@@ -7,6 +7,7 @@ import {
   clean,
   formatPrice,
   parseISTInstant,
+  parseISTClockInstant,
   externalUrl
 } from "./format";
 
@@ -276,5 +277,33 @@ describe("parseISTInstant", () => {
     const a = parseISTInstant("2026-03-15T20:00")!;
     const b = parseISTInstant("2026-03-16T09:00")!;
     expect(a.getTime()).toBeLessThan(b.getTime());
+  });
+});
+
+describe("parseISTClockInstant", () => {
+  it("agrees with parseISTInstant whenever a time of day is stated", () => {
+    for (const v of ["2026-03-15T20:00", "2026-03-15T20:00:00", "2026-03-15T20:00:00+05:30", "2026-03-15T20:00:00Z"]) {
+      expect(parseISTClockInstant(v)!.getTime()).toBe(parseISTInstant(v)!.getTime());
+    }
+  });
+
+  it("is null for a date with no time, which parseISTInstant still answers for", () => {
+    expect(parseISTInstant("2026-03-15")).not.toBeNull();
+    expect(parseISTClockInstant("2026-03-15")).toBeNull();
+  });
+
+  // The whole reason this is separate from parseISTInstant: ordering wants an
+  // answer for a bare date, comparison must not have one, because the answer
+  // collides with a real 05:30 IST.
+  it("declines the collision that makes a bare date unusable for comparison", () => {
+    expect(parseISTInstant("2026-03-15")!.getTime()).toBe(parseISTInstant("2026-03-15T05:30")!.getTime());
+    expect(parseISTClockInstant("2026-03-15")).toBeNull();
+    expect(parseISTClockInstant("2026-03-15T05:30")).not.toBeNull();
+  });
+
+  it("is null for the free text and the absent values the column also holds", () => {
+    for (const v of ["", "   ", "Sunday evening", "TBD", "8 PM Sunday", null, undefined]) {
+      expect(parseISTClockInstant(v as any)).toBeNull();
+    }
   });
 });
