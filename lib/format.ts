@@ -122,16 +122,6 @@ export function parseISTClockInstant(raw: string | null | undefined): Date | nul
   return HAS_CLOCK.test(s) ? parseISTInstant(s) : null;
 }
 
-export function formatWhen(raw: string): { day: string; time: string } | null {
-  if (!raw) return null;
-  const d = parseISTInstant(raw);
-  if (!d) return { day: raw, time: "" };
-  return {
-    day: d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", timeZone: IST }),
-    time: d.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: IST })
-  };
-}
-
 // Ingestion writes whatever the extractor produced, and some rows carry the
 // literal strings "undefined", "null", or the placeholder "string" where a
 // field was missing. Render nothing rather than printing the word.
@@ -140,6 +130,30 @@ const JUNK = new Set(["undefined", "null", "none", "n/a", "na", "string", "-", "
 export function clean(raw: string | null | undefined): string {
   const v = (raw ?? "").trim();
   return JUNK.has(v.toLowerCase()) ? "" : v;
+}
+
+/**
+ * The day and time to print for a startTimeIST value, or null when the row
+ * states no time and the page should say so itself.
+ *
+ * The raw value goes through `clean` first, which is what separates the two
+ * kinds of unparseable string. Prose a human wrote, "Sunday evening", is a
+ * real if imprecise claim about when the screening is, so it is echoed. A
+ * placeholder the extractor left behind, "undefined" or the literal "string",
+ * claims nothing, and echoing it printed the word itself as the date on the
+ * public listing. Null is the right answer for those because both call sites
+ * already handle it: the card omits the date line and the detail page prints
+ * "To be confirmed".
+ */
+export function formatWhen(raw: string): { day: string; time: string } | null {
+  const v = clean(raw);
+  if (!v) return null;
+  const d = parseISTInstant(v);
+  if (!d) return { day: v, time: "" };
+  return {
+    day: d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", timeZone: IST }),
+    time: d.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: IST })
+  };
 }
 
 // Three outcomes, not two. A null price means nobody could read one off the

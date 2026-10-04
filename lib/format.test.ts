@@ -182,6 +182,31 @@ describe("formatWhen", () => {
     const r = formatWhen("Sunday evening");
     expect(r).toEqual({ day: "Sunday evening", time: "" });
   });
+
+  // A placeholder is not a claim about when the screening is, and echoing one
+  // printed the word itself where the date belongs: a card on the public
+  // listing read "undefined" and the detail page said the screening was on
+  // "string". Null is what both call sites already know how to render.
+  it("reports a placeholder as no time rather than printing the word", () => {
+    for (const v of ["undefined", "null", "none", "n/a", "NA", "string", "-", "\u2014"]) {
+      expect(formatWhen(v)).toBeNull();
+    }
+  });
+
+  it("sees a padded placeholder as a placeholder", () => {
+    expect(formatWhen("  undefined  ")).toBeNull();
+    expect(formatWhen("   ")).toBeNull();
+  });
+
+  it("trims the text it echoes", () => {
+    expect(formatWhen("  Sunday evening  ")).toEqual({ day: "Sunday evening", time: "" });
+  });
+
+  it("still parses a value carrying surrounding whitespace", () => {
+    expect(formatWhen("  2026-03-15T18:30  ")).toEqual(
+      formatWhen("2026-03-15T18:30")
+    );
+  });
 });
 
 describe("formatPrice", () => {
