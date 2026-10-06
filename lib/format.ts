@@ -152,7 +152,20 @@ export function formatWhen(raw: string): { day: string; time: string } | null {
   if (!d) return { day: v, time: "" };
   return {
     day: d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", timeZone: IST }),
-    time: d.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: IST })
+    // Only a value that stated a clock reading gets a time printed. The day
+    // comes from `parseISTInstant`, which answers for a bare date by reading it
+    // as UTC midnight, and that is the right answer for the day: 05:30 IST the
+    // same morning still lands on the morning the page named. It is not an
+    // answer about the time, and printing it rendered a row whose source said
+    // only "2026-03-15" as "Sun, 15 Mar · 5:30 am", a start time nobody
+    // wrote down and one no bar in Mumbai is showing a race at. The same held
+    // for every other shape with no clock the spec recognises: a value the
+    // runtime reads as host-local, "2026-03-15 18:30", printed 12:00 am. An
+    // omitted time is the honest reading, and both call sites already drop the
+    // time when it is empty, because prose with no instant takes this path too.
+    time: parseISTClockInstant(v)
+      ? d.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: IST })
+      : ""
   };
 }
 
