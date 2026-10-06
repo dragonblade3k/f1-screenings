@@ -207,6 +207,38 @@ describe("formatWhen", () => {
       formatWhen("2026-03-15T18:30")
     );
   });
+
+  // A date with no time is a real claim about the day and no claim at all
+  // about the hour. It reached the public listing as one anyway: the instant
+  // behind a bare date is UTC midnight, which is 05:30 IST, so a card whose
+  // source page printed only "2026-03-15" advertised the screening at
+  // "Sun, 15 Mar · 5:30 am".
+  it("prints the day but no time for a date that states no clock", () => {
+    expect(inZone("UTC", "2026-03-15")).toEqual({ day: "Sun, 15 Mar", time: "" });
+  });
+
+  it("keeps the day of a bare date out of the server's zone", () => {
+    for (const tz of ["UTC", "Asia/Kolkata", "America/New_York"]) {
+      expect(inZone(tz, "2026-03-15")).toEqual({ day: "Sun, 15 Mar", time: "" });
+    }
+  });
+
+  // Not only the ISO form. Every shape the spec reads without a clock landed
+  // on a fabricated time: a non-ISO date-time is read as the runtime's local
+  // zone, which on the UTC host printed 12:00 am.
+  it("prints no time for any value that never stated one", () => {
+    for (const v of ["2026-03-15", "March 15, 2026", "2026-03-15 18:30"]) {
+      expect(inZone("UTC", v)!.time).toBe("");
+    }
+  });
+
+  // The guard is the stated clock reading, not the hour it happens to be, so
+  // a screening really at 05:30 still prints its time.
+  it("still prints a stated time that equals the bare-date instant", () => {
+    const r = inZone("UTC", "2026-03-15T05:30");
+    expect(r!.day).toBe("Sun, 15 Mar");
+    expect(r!.time).toContain("5:30");
+  });
 });
 
 describe("formatPrice", () => {
