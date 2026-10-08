@@ -33,13 +33,26 @@ function mostSignificant(raw: string, ranked: readonly string[]): string | null 
   return ranked.find((r) => present.has(r)) ?? null;
 }
 
-export function areaLabel(a: string): string {
+/**
+ * The place an area value names, or null when it names none.
+ *
+ * Separate from `areaLabel` because the two answers are for different
+ * audiences. A reader looking at a row whose area never resolved is owed a
+ * sentence saying so, which is what `areaLabel` returns. A caller that is
+ * going to hand the value to something other than a reader is owed the
+ * absence itself, because a sentence written for a reader is not a place.
+ */
+export function areaName(a: string): string | null {
   switch (firstListed(a, AREAS)) {
     case "MUMBAI": return "Mumbai";
     case "THANE": return "Thane";
     case "NAVI_MUMBAI": return "Navi Mumbai";
-    default: return "Area unconfirmed";
+    default: return null;
   }
+}
+
+export function areaLabel(a: string): string {
+  return areaName(a) ?? "Area unconfirmed";
 }
 
 export type SessionKind = "race" | "quali" | "sprint" | "fp" | "unknown";
@@ -183,6 +196,35 @@ export function formatPrice(
   }
   if (p === 0) return { text: "Free entry", free: true, known: true };
   return { text: `₹${p.toLocaleString("en-IN")}`, free: false, known: true };
+}
+
+/**
+ * The search text for a maps link to a venue, or null when the row names
+ * nowhere to look and the page should omit the link rather than open a map of
+ * nothing in particular.
+ *
+ * Every part of this string is a claim about where the venue is, so every part
+ * has to be one the row actually made. `areaLabel` is the right source for the
+ * page body and the wrong one here: its fallback, "Area unconfirmed", is a
+ * sentence written for a reader, and sending it as search text asks the maps
+ * provider to find a venue in a place that does not exist, which pushes the
+ * real venue down the results it does return. `areaName` answers null instead,
+ * so an unresolved area contributes nothing at all.
+ *
+ * The venue name and the address go through `clean` for the same reason. The
+ * address already did at the one call site, but the venue name did not, so a
+ * pre-fix row holding the literal "string" where the venue belongs searched
+ * for that word. Dropping empty parts rather than joining them also keeps a
+ * missing address from leaving a gap in the middle of the query.
+ */
+export function mapsQuery(
+  venueName: string | null | undefined,
+  address: string | null | undefined,
+  area: string | null | undefined
+): string | null {
+  const stated = [clean(venueName), clean(address), areaName(area ?? "") ?? ""];
+  const q = stated.filter(Boolean).join(" ");
+  return q || null;
 }
 
 // Links are the one extracted field with no protection at all. `bookingUrl` is

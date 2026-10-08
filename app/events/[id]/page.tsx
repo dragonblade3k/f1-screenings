@@ -6,7 +6,8 @@ import {
   formatWhen,
   formatPrice,
   clean,
-  externalUrl
+  externalUrl,
+  mapsQuery
 } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -35,7 +36,10 @@ export default async function EventDetail({ params }: { params: { id: string } }
   // table" button that goes nowhere is worse than no button.
   const bookingUrl = externalUrl(e.bookingUrl);
   const sourceUrl = externalUrl(e.sourceUrl);
-  const mapsQ = encodeURIComponent(`${e.venueName} ${address} ${areaLabel(e.area)}`);
+  // The maps link is search text, not prose, so it is built from the parts of
+  // the row that actually name a place. `areaLabel` would contribute the words
+  // "Area unconfirmed" to the search for a row whose area never resolved.
+  const mapsQ = mapsQuery(e.venueName, e.address, e.area);
 
   return (
     <div className="detail">
@@ -83,14 +87,16 @@ export default async function EventDetail({ params }: { params: { id: string } }
             Book a table
           </a>
         ) : null}
-        <a
-          className="btn"
-          href={`https://www.google.com/maps/search/?api=1&query=${mapsQ}`}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Open in Maps
-        </a>
+        {mapsQ ? (
+          <a
+            className="btn"
+            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapsQ)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Open in Maps
+          </a>
+        ) : null}
         {sourceUrl ? (
           <a className="btn ghost" href={sourceUrl} target="_blank" rel="noopener noreferrer">
             Original listing
