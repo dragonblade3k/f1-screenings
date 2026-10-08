@@ -8,7 +8,9 @@ import {
   formatPrice,
   parseISTInstant,
   parseISTClockInstant,
-  externalUrl
+  externalUrl,
+  areaName,
+  mapsQuery
 } from "./format";
 
 // These helpers exist because early ingest runs, before decoding was
@@ -41,6 +43,65 @@ describe("areaLabel", () => {
   it("is insensitive to case and padding", () => {
     expect(areaLabel(" mumbai ")).toBe("Mumbai");
     expect(areaLabel("thane | mumbai")).toBe("Thane");
+  });
+});
+
+describe("areaName", () => {
+  it("resolves the same values areaLabel does", () => {
+    expect(areaName("MUMBAI")).toBe("Mumbai");
+    expect(areaName("NAVI_MUMBAI")).toBe("Navi Mumbai");
+    expect(areaName("UNKNOWN|THANE")).toBe("Thane");
+  });
+
+  // The whole reason it is separate: areaLabel owes a reader a sentence, this
+  // owes a caller the absence, and a caller that is not a reader must not be
+  // handed the sentence.
+  it("is null where areaLabel says 'Area unconfirmed'", () => {
+    for (const v of ["", "UNKNOWN", "PUNE", "FP|QUALI"]) {
+      expect(areaLabel(v)).toBe("Area unconfirmed");
+      expect(areaName(v)).toBeNull();
+    }
+  });
+});
+
+describe("mapsQuery", () => {
+  it("joins the parts of a clean row", () => {
+    expect(mapsQuery("Doolally Taproom", "Shop 5, Kamala Mills, Lower Parel", "MUMBAI"))
+      .toBe("Doolally Taproom Shop 5, Kamala Mills, Lower Parel Mumbai");
+  });
+
+  // The bug this helper was extracted for. The detail page built the query as
+  // `${venueName} ${address} ${areaLabel(area)}`, so a row whose area never
+  // resolved sent the words "Area unconfirmed" to the maps provider as part of
+  // the search text and pushed the real venue down the results.
+  it("contributes nothing for an area that did not resolve", () => {
+    const q = mapsQuery("Doolally Taproom", "Shop 5, Kamala Mills, Lower Parel", "UNKNOWN");
+    expect(q).toBe("Doolally Taproom Shop 5, Kamala Mills, Lower Parel");
+    expect(q).not.toContain("unconfirmed");
+  });
+
+  it("drops a placeholder venue name rather than searching for the word", () => {
+    expect(mapsQuery("string", "Shop 5, Kamala Mills", "MUMBAI")).toBe("Shop 5, Kamala Mills Mumbai");
+    expect(mapsQuery("undefined", "Shop 5, Kamala Mills", "THANE")).toBe("Shop 5, Kamala Mills Thane");
+  });
+
+  it("drops a placeholder address, leaving no gap in the middle", () => {
+    expect(mapsQuery("Doolally Taproom", "undefined", "MUMBAI")).toBe("Doolally Taproom Mumbai");
+    expect(mapsQuery("Doolally Taproom", "", "MUMBAI")).toBe("Doolally Taproom Mumbai");
+    expect(mapsQuery("Doolally Taproom", null, "MUMBAI")).toBe("Doolally Taproom Mumbai");
+  });
+
+  // Null rather than an empty search, so the page can omit the button. The
+  // same call the booking link already makes: a button that goes nowhere
+  // useful is worse than no button.
+  it("is null when no part of the row names a place", () => {
+    expect(mapsQuery("string", "null", "null")).toBeNull();
+    expect(mapsQuery("", "", "")).toBeNull();
+    expect(mapsQuery(null, undefined, undefined)).toBeNull();
+  });
+
+  it("still answers when the venue name is all the row has", () => {
+    expect(mapsQuery("Doolally Taproom", "undefined", "UNKNOWN")).toBe("Doolally Taproom");
   });
 });
 
