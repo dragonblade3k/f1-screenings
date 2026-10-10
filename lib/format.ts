@@ -146,6 +146,29 @@ export function clean(raw: string | null | undefined): string {
 }
 
 /**
+ * The venue a row names, or null when it names none.
+ *
+ * Same split as `areaName` and `areaLabel`, and it exists for the same reason:
+ * the two callers want different sentences. The public pages owe a visitor
+ * something that reads as a listing with a missing name, the review queue owes
+ * a reviewer something that says the extraction failed, and neither sentence is
+ * the venue, so the helper answers with the absence and each page supplies its
+ * own words.
+ *
+ * `venueName` is the one free text field on the card that was never cleaned.
+ * Its EVENT_SCHEMA entry is a plain `type: "string"`, so unlike area and
+ * session there is no enum for constrained decoding to enforce and the prompt's
+ * instruction not to echo a placeholder is the only thing standing between the
+ * model and the literal "undefined" or "string" in the heading. Invariant 1's
+ * lesson is that such an instruction guarantees nothing. `scripts/ingest.ts`
+ * rejects only the empty string, so the word is stored verbatim and the card
+ * printed it as the name of the bar.
+ */
+export function venueName(raw: string | null | undefined): string | null {
+  return clean(raw) || null;
+}
+
+/**
  * The day and time to print for a startTimeIST value, or null when the row
  * states no time and the page should say so itself.
  *
@@ -211,18 +234,18 @@ export function formatPrice(
  * real venue down the results it does return. `areaName` answers null instead,
  * so an unresolved area contributes nothing at all.
  *
- * The venue name and the address go through `clean` for the same reason. The
- * address already did at the one call site, but the venue name did not, so a
- * pre-fix row holding the literal "string" where the venue belongs searched
- * for that word. Dropping empty parts rather than joining them also keeps a
- * missing address from leaving a gap in the middle of the query.
+ * The venue name goes through `venueName` and the address through `clean` for
+ * the same reason. The address already did at the one call site, but the venue
+ * name did not, so a row holding the literal "string" where the venue belongs
+ * searched for that word. Dropping empty parts rather than joining them also
+ * keeps a missing address from leaving a gap in the middle of the query.
  */
 export function mapsQuery(
-  venueName: string | null | undefined,
+  venue: string | null | undefined,
   address: string | null | undefined,
   area: string | null | undefined
 ): string | null {
-  const stated = [clean(venueName), clean(address), areaName(area ?? "") ?? ""];
+  const stated = [venueName(venue) ?? "", clean(address), areaName(area ?? "") ?? ""];
   const q = stated.filter(Boolean).join(" ");
   return q || null;
 }

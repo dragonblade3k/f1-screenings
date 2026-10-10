@@ -7,7 +7,8 @@ import {
   formatPrice,
   clean,
   externalUrl,
-  mapsQuery
+  mapsQuery,
+  venueName
 } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -50,7 +51,7 @@ export default async function EventDetail({ params }: { params: { id: string } }
         <span className="link-sm">{areaLabel(e.area)}{locality ? ` · ${locality}` : ""}</span>
       </div>
 
-      <h1>{e.venueName}</h1>
+      <h1>{venueName(e.venueName) ?? "Venue not named"}</h1>
 
       <dl className="facts">
         <div className="fact">

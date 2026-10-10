@@ -2,7 +2,15 @@ import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import { isPublicOnly } from "@/lib/deployment";
 import AdminHeaderInjector from "@/app/admin/AdminHeaderInjector";
-import { areaLabel, sessionKind, sessionLabel, formatWhen, formatPrice, clean } from "@/lib/format";
+import {
+  areaLabel,
+  sessionKind,
+  sessionLabel,
+  formatWhen,
+  formatPrice,
+  clean,
+  venueName
+} from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -55,7 +63,7 @@ export default async function AdminInbox() {
 
                 <div className="top">
                   <div>
-                    <h2 className="venue">{c.venueName || "No venue extracted"}</h2>
+                    <h2 className="venue">{venueName(c.venueName) ?? "No venue extracted"}</h2>
                     <div className="meta">
                       {areaLabel(c.area)}
                       {clean(c.locality) ? <><span className="dot">·</span>{clean(c.locality)}</> : null}

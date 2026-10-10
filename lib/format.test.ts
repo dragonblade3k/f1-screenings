@@ -10,7 +10,8 @@ import {
   parseISTClockInstant,
   externalUrl,
   areaName,
-  mapsQuery
+  mapsQuery,
+  venueName
 } from "./format";
 
 // These helpers exist because early ingest runs, before decoding was
@@ -172,6 +173,48 @@ describe("clean", () => {
 
   it("does not strip a real value that merely contains a junk word", () => {
     expect(clean("Null Cafe")).toBe("Null Cafe");
+  });
+});
+
+describe("venueName", () => {
+  it("passes a real venue through", () => {
+    expect(venueName("Doolally Taproom")).toBe("Doolally Taproom");
+    expect(venueName("  The Bar Stock Exchange  ")).toBe("The Bar Stock Exchange");
+  });
+
+  // The bug this was extracted for. Both pages rendered the column straight
+  // into the heading, so a row carrying a placeholder published a card whose
+  // title was the word "undefined" while every neighbouring field on the same
+  // card already read as missing: "Area unconfirmed", "Price not listed". The
+  // detail page was contradicting itself about one field, since the maps link
+  // had been cleaning the venue name since the 2026-10-08 fix and so dropped
+  // its button for exactly the rows whose <h1> printed the word.
+  it("answers null for a placeholder rather than naming a bar after it", () => {
+    expect(venueName("undefined")).toBeNull();
+    expect(venueName("string")).toBeNull();
+    expect(venueName("null")).toBeNull();
+    expect(venueName("N/A")).toBeNull();
+  });
+
+  it("answers null for an absent value", () => {
+    expect(venueName("")).toBeNull();
+    expect(venueName("   ")).toBeNull();
+    expect(venueName(null)).toBeNull();
+    expect(venueName(undefined)).toBeNull();
+  });
+
+  // Null and not a sentence, because the two call sites print different ones:
+  // a visitor gets "Venue not named" and a reviewer gets "No venue extracted".
+  // Returning either from here would put one page's words on the other.
+  it("returns the absence itself, not a label", () => {
+    const answer = venueName("undefined");
+    expect(answer).toBeNull();
+    expect(answer).not.toBe("");
+  });
+
+  it("does not reject a venue whose name contains a junk word", () => {
+    expect(venueName("Null Cafe")).toBe("Null Cafe");
+    expect(venueName("The String Bar")).toBe("The String Bar");
   });
 });
 
