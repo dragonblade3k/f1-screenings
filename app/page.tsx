@@ -5,7 +5,8 @@ import {
   sessionLabel,
   formatWhen,
   formatPrice,
-  clean
+  clean,
+  venueName
 } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -62,7 +63,7 @@ export default async function HomePage() {
                 </div>
                 <div className="top">
                   <div>
-                    <h2 className="venue">{e.venueName}</h2>
+                    <h2 className="venue">{venueName(e.venueName) ?? "Venue not named"}</h2>
                     <div className="meta">
                       {areaLabel(e.area)}
                       {locality ? <><span className="dot">·</span>{locality}</> : null}
