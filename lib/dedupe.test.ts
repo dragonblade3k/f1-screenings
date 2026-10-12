@@ -55,6 +55,23 @@ describe("isSameEvent", () => {
   // one; parsed as an instant it lands on 05:30 IST, which is also what a
   // stated 05:30 parses to. Those are different claims and must not merge, so
   // a comparison involving a bare date stays on the text it always used.
+  // The separator is one of those spellings. A page writing "2026-03-15 18:30"
+  // and one writing "2026-03-15T18:30:00+05:30" name the same 6:30 pm, and
+  // until the parser read the spaced form as a moment the pair fell through to
+  // the text comparison and became two cards in the queue describing one
+  // screening.
+  it("matches the same moment written with a space instead of a T", () => {
+    const spaced = at("Doolally Taproom", "2026-03-15 18:30");
+    expect(isSameEvent(spaced, at("Doolally Taproom", "2026-03-15T18:30:00+05:30"))).toBe(true);
+    expect(isSameEvent(spaced, at("Doolally Taproom", "2026-03-15T18:30"))).toBe(true);
+  });
+
+  it("still separates a spaced value from a different moment", () => {
+    const spaced = at("Doolally Taproom", "2026-03-15 18:30");
+    expect(isSameEvent(spaced, at("Doolally Taproom", "2026-03-15T19:30"))).toBe(false);
+    expect(isSameEvent(spaced, at("Doolally Taproom", "2026-03-15"))).toBe(false);
+  });
+
   it("never merges a date with no time into a stated time", () => {
     expect(isSameEvent(at("Doolally Taproom", "2026-03-15"), at("Doolally Taproom", "2026-03-15T05:30"))).toBe(false);
     expect(isSameEvent(at("Doolally Taproom", "2026-03-15"), at("Doolally Taproom", "2026-03-15T00:00"))).toBe(false);

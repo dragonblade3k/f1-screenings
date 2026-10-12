@@ -91,11 +91,35 @@ const HAS_OFFSET = /(?:Z|[+-]\d{2}:?\d{2})$/i;
 // right day.
 const HAS_CLOCK = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
 
+// The same date and clock reading with a space where ISO 8601 puts the "T".
+// The prompt asks for a "best effort ISO 8601 string" and this is the shape
+// the model most often answers with instead, because it is how a time is
+// written on the page it is reading.
+const SPACE_SEPARATED = /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)/;
+
+// Restore the "T" so a space-separated value takes the same path as the ISO
+// spelling of the identical moment.
+//
+// Everything below keys off HAS_CLOCK, and HAS_CLOCK requires the "T", so a
+// value written "2026-03-15 18:30" was treated as stating no time at all. It
+// fell through to `new Date`, which reads a non-ISO date-time as the runtime's
+// local zone rather than as IST: on the UTC host an 18:30 reading became
+// 18:30 UTC, which is 00:00 IST the following morning. The card then printed
+// the day after the one the source page stated, and `startsAt` sorted it
+// there too.
+//
+// The substitution is deliberately narrow: it only ever rewrites a string the
+// "T" path would already have accepted, so it cannot widen what counts as a
+// stated time, only spell it the way the rest of this file expects.
+function isoForm(raw: string): string {
+  return raw.replace(SPACE_SEPARATED, "$1T$2");
+}
+
 // ECMAScript reads a date-time carrying no offset as the runtime's local
 // time, which on a UTC host is five and a half hours off from what the
 // column name promises. Read it as the IST wall clock it is.
 function toInstant(raw: string): Date {
-  const s = raw.trim();
+  const s = isoForm(raw.trim());
   return new Date(HAS_CLOCK.test(s) && !HAS_OFFSET.test(s) ? s + IST_OFFSET : s);
 }
 
@@ -131,7 +155,7 @@ export function parseISTInstant(raw: string | null | undefined): Date | null {
  * text, which is all it ever had to go on.
  */
 export function parseISTClockInstant(raw: string | null | undefined): Date | null {
-  const s = (raw ?? "").trim();
+  const s = isoForm((raw ?? "").trim());
   return HAS_CLOCK.test(s) ? parseISTInstant(s) : null;
 }
 

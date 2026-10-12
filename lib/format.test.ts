@@ -330,8 +330,55 @@ describe("formatWhen", () => {
   // Not only the ISO form. Every shape the spec reads without a clock landed
   // on a fabricated time: a non-ISO date-time is read as the runtime's local
   // zone, which on the UTC host printed 12:00 am.
+  //
+  // "2026-03-15 18:30" used to be in this list and did not belong: it states
+  // 18:30 as plainly as the ISO spelling does, and the only reason it printed
+  // no time was that the separator check could not see it. It is covered
+  // below as a value whose time is printed.
   it("prints no time for any value that never stated one", () => {
-    for (const v of ["2026-03-15", "March 15, 2026", "2026-03-15 18:30"]) {
+    for (const v of ["2026-03-15", "March 15, 2026"]) {
+      expect(inZone("UTC", v)!.time).toBe("");
+    }
+  });
+
+  // A space where ISO 8601 wants a "T" is the shape the extractor reaches for
+  // most often after the ISO one, because it is how the source page writes a
+  // time. Reading it as the runtime's local zone put an evening screening on
+  // the next morning: on the UTC host 18:30 was taken as 18:30 UTC, which is
+  // 00:00 IST on 16 March, so the card advertised the wrong day and printed
+  // no time to go with it.
+  it("reads a space-separated date and time as the IST moment it states", () => {
+    const r = inZone("UTC", "2026-03-15 18:30");
+    expect(r!.day).toBe("Sun, 15 Mar");
+    expect(r!.time).toContain("6:30");
+  });
+
+  it("gives a space-separated value the same answer as its ISO spelling", () => {
+    for (const [spaced, iso] of [
+      ["2026-03-15 18:30", "2026-03-15T18:30"],
+      ["2026-03-15 18:30:00", "2026-03-15T18:30:00"],
+      ["2026-03-15 00:30", "2026-03-15T00:30"],
+      ["2026-03-15 18:30:00+05:30", "2026-03-15T18:30:00+05:30"],
+      ["2026-03-15 13:00:00Z", "2026-03-15T13:00:00Z"]
+    ]) {
+      expect(inZone("UTC", spaced)).toEqual(inZone("UTC", iso));
+    }
+  });
+
+  it("keeps a space-separated value out of the server's zone", () => {
+    for (const tz of ["UTC", "Asia/Kolkata", "America/New_York"]) {
+      expect(inZone(tz, "2026-03-15 18:30")).toEqual({
+        day: "Sun, 15 Mar",
+        time: inZone("UTC", "2026-03-15T18:30")!.time
+      });
+    }
+  });
+
+  // The separator fix must not reach any further than the separator. A value
+  // that merely begins with a date keeps the behaviour it had, which is a day
+  // and no time, rather than being read as a time nobody wrote.
+  it("does not read a time out of a value that only begins with a date", () => {
+    for (const v of ["2026-03-15 evening", "2026-03-15 6:30 pm", "2026-03-15  18:30"]) {
       expect(inZone("UTC", v)!.time).toBe("");
     }
   });
@@ -445,6 +492,30 @@ describe("parseISTClockInstant", () => {
   it("agrees with parseISTInstant whenever a time of day is stated", () => {
     for (const v of ["2026-03-15T20:00", "2026-03-15T20:00:00", "2026-03-15T20:00:00+05:30", "2026-03-15T20:00:00Z"]) {
       expect(parseISTClockInstant(v)!.getTime()).toBe(parseISTInstant(v)!.getTime());
+    }
+  });
+
+  // The instant is what fills `startsAt`, so the separator bug was a sort key
+  // bug as well as a display one: the row sorted five and a half hours late,
+  // which is enough to move an evening screening past midnight and list it
+  // under the following day.
+  it("reads a space-separated value as the same instant as its ISO spelling", () => {
+    expect(parseISTInstant("2026-03-15 18:30")!.getTime()).toBe(
+      parseISTInstant("2026-03-15T18:30")!.getTime()
+    );
+    expect(parseISTClockInstant("2026-03-15 18:30")!.getTime()).toBe(
+      parseISTClockInstant("2026-03-15T18:30")!.getTime()
+    );
+  });
+
+  it("treats a space-separated value as stating a clock reading", () => {
+    expect(parseISTClockInstant("2026-03-15 18:30")).not.toBeNull();
+    expect(parseISTClockInstant("2026-03-15 18:30:00")).not.toBeNull();
+  });
+
+  it("still reports no clock reading for a value that states none", () => {
+    for (const v of ["2026-03-15", "2026-03-15 evening", "March 15, 2026"]) {
+      expect(parseISTClockInstant(v)).toBeNull();
     }
   });
 
