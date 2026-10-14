@@ -97,22 +97,78 @@ const HAS_CLOCK = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
 // written on the page it is reading.
 const SPACE_SEPARATED = /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)/;
 
-// Restore the "T" so a space-separated value takes the same path as the ISO
-// spelling of the identical moment.
+// A date and a clock reading written the way a listings page prints the time
+// rather than the way ISO 8601 requires it: a twelve hour marker ("6:30 pm"),
+// an hour without its leading zero ("8:30"), more than one space between the
+// date and the time, or any combination of those. These are the shapes the
+// extractor reaches for after the plain space-separated one, for the same
+// reason it reaches for that one: it is copying what the page says.
 //
-// Everything below keys off HAS_CLOCK, and HAS_CLOCK requires the "T", so a
-// value written "2026-03-15 18:30" was treated as stating no time at all. It
-// fell through to `new Date`, which reads a non-ISO date-time as the runtime's
-// local zone rather than as IST: on the UTC host an 18:30 reading became
-// 18:30 UTC, which is 00:00 IST the following morning. The card then printed
-// the day after the one the source page stated, and `startsAt` sorted it
-// there too.
+// Anchored at both ends, with only an offset allowed to follow the reading, so
+// a value that merely begins with a date and a number keeps whatever reading it
+// already had instead of having a time read out of its first few characters.
+const LOOSE_CLOCK =
+  /^(\d{4}-\d{2}-\d{2})[ T] *(\d{1,2}):(\d{2})(:\d{2}(?:\.\d+)?)?\s*(?:([ap])\.?m\.?)?\s*(Z|[+-]\d{2}:?\d{2})?$/i;
+
+// Rewrite a loosely written date and time as the strict ISO spelling of the
+// same moment, so it takes the same path as the ISO form rather than a
+// different one.
 //
-// The substitution is deliberately narrow: it only ever rewrites a string the
-// "T" path would already have accepted, so it cannot widen what counts as a
-// stated time, only spell it the way the rest of this file expects.
+// Everything below keys off HAS_CLOCK, and HAS_CLOCK accepts only a "T" and a
+// zero-padded twenty-four hour hour, so a value written "2026-03-15 18:30",
+// "2026-03-15 6:30 pm" or "2026-03-15 8:30" was treated as stating no time at
+// all. Each then fell through to a bare `new Date`, which reads a non-ISO
+// date-time as the runtime's local zone rather than as IST: on the UTC host an
+// 18:30 reading became 18:30 UTC, which is 00:00 IST the following morning, so
+// the card printed the day after the one the source page stated and `startsAt`
+// sorted it there too. The twelve hour spellings `new Date` refuses outright
+// were worse again, because the unparsed string itself was printed where the
+// date belongs.
+//
+// The conversion is explicit rather than left to the runtime. `new Date` does
+// read some of these, but which ones and in what zone is unspecified fallback
+// behaviour, and the three shapes it happens to reject are exactly the ones
+// that reach a public page as raw text. Normalizing to the one spelling the
+// spec defines means the answer comes from the ISO path in every case.
+//
+// It stays a normalization and not a parser: it only ever rewrites a reading
+// that names an unambiguous wall clock time, so it can spell a stated time the
+// way the rest of this file expects but cannot widen what counts as one.
 function isoForm(raw: string): string {
+  // The full reading is tried first and the separator rewrite is the fallback,
+  // not the other way round. A twelve hour reading can carry a padded hour,
+  // "2026-03-15 12:30 am", and the separator rewrite accepts that hour on its
+  // own: it would produce "2026-03-15T12:30 am", which satisfies HAS_CLOCK,
+  // reaches `new Date` with the marker still attached and parses as nothing at
+  // all. Half past midnight would have been published as the literal string.
+  const m = LOOSE_CLOCK.exec(raw);
+  if (m) {
+    const [, date, hour, minute, seconds, marker, offset] = m;
+    const h = hour24(Number(hour), marker);
+    if (h !== null) {
+      return `${date}T${String(h).padStart(2, "0")}:${minute}${seconds ?? ""}${offset ?? ""}`;
+    }
+  }
   return raw.replace(SPACE_SEPARATED, "$1T$2");
+}
+
+/**
+ * The twenty-four hour hour a reading names, or null when it names none.
+ *
+ * A marker makes the reading a twelve hour one, so the hour has to be a legal
+ * twelve hour hour: "13:30 pm" is not a time anybody meant and gets no reading
+ * rather than a guess at one. 12 am is hour 0 and 12 pm is hour 12, which is
+ * the one place the arithmetic is not simply "add twelve".
+ *
+ * With no marker the reading is already twenty-four hour and only needs its
+ * leading zero. Minutes and seconds are passed through untouched, the same way
+ * the space-separated rewrite passes them through, and an impossible one is
+ * left for `new Date` to refuse.
+ */
+function hour24(hour: number, marker: string | undefined): number | null {
+  if (!marker) return hour >= 0 && hour <= 23 ? hour : null;
+  if (hour < 1 || hour > 12) return null;
+  return marker.toLowerCase() === "p" ? (hour % 12) + 12 : hour % 12;
 }
 
 // ECMAScript reads a date-time carrying no offset as the runtime's local

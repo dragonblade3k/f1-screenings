@@ -103,6 +103,38 @@ describe("isSameEvent", () => {
     ).toBe(false);
   });
 
+  // Two source pages describing one screening rarely spell its time the same
+  // way, and a twelve hour reading is the spelling a listings page uses. It
+  // compared as text against the ISO spelling, so one 6:30 pm screening reached
+  // the review queue as two cards that render identically and that a reviewer
+  // had no way to tell apart.
+  it("matches one moment written as a twelve hour reading and as ISO", () => {
+    expect(
+      isSameEvent(
+        at("Doolally Taproom", "2026-03-15 6:30 pm"),
+        at("Doolally Taproom", "2026-03-15T18:30:00+05:30")
+      )
+    ).toBe(true);
+  });
+
+  // The widening only ever reaches pairs naming the identical wall clock
+  // moment. A marker the clock cannot carry still states no readable time, so
+  // it falls back to the text it always had rather than matching a real one.
+  it("still separates a twelve hour reading from a different moment", () => {
+    expect(
+      isSameEvent(
+        at("Doolally Taproom", "2026-03-15 6:30 pm"),
+        at("Doolally Taproom", "2026-03-15 7:30 pm")
+      )
+    ).toBe(false);
+    expect(
+      isSameEvent(
+        at("Doolally Taproom", "2026-03-15 13:30 pm"),
+        at("Doolally Taproom", "2026-03-15T13:30")
+      )
+    ).toBe(false);
+  });
+
   it("matches when neither extraction found a time", () => {
     expect(isSameEvent(at("Doolally Taproom", ""), at("Doolally Taproom", ""))).toBe(true);
   });
