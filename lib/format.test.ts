@@ -374,11 +374,23 @@ describe("formatWhen", () => {
     }
   });
 
-  // The separator fix must not reach any further than the separator. A value
-  // that merely begins with a date keeps the behaviour it had, which is a day
-  // and no time, rather than being read as a time nobody wrote.
+  // The normalization must not reach any further than the spelling. A value
+  // that merely begins with a date, or that carries anything beyond the
+  // reading itself, keeps the behaviour it had, which is a day and no time,
+  // rather than being read as a time nobody wrote.
+  //
+  // "2026-03-15 6:30 pm" and "2026-03-15  18:30" used to be in this list and
+  // did not belong. Each states its time as plainly as the ISO spelling does,
+  // and the only reason neither printed one was that the separator check could
+  // not see past the spelling. Both are covered below as values whose time is
+  // printed.
   it("does not read a time out of a value that only begins with a date", () => {
-    for (const v of ["2026-03-15 evening", "2026-03-15 6:30 pm", "2026-03-15  18:30"]) {
+    for (const v of [
+      "2026-03-15 evening",
+      "2026-03-15 6:30 pm onwards",
+      "2026-03-15 18:30 onwards",
+      "2026-03-15 doors at 6"
+    ]) {
       expect(inZone("UTC", v)!.time).toBe("");
     }
   });
@@ -389,6 +401,68 @@ describe("formatWhen", () => {
     const r = inZone("UTC", "2026-03-15T05:30");
     expect(r!.day).toBe("Sun, 15 Mar");
     expect(r!.time).toContain("5:30");
+  });
+
+  // A twelve hour reading is how an Indian listings page actually prints an
+  // evening screening, so it is what the extractor copies. It satisfied none of
+  // the checks here: the hour has no leading zero and the marker is not part of
+  // any ISO shape, so the value fell through to `new Date`, which read it as
+  // host-local. On the UTC host 6:30 pm became 18:30 UTC, which is 00:00 IST on
+  // 16 March, and the card advertised the wrong day with no time on it.
+  it("reads a twelve hour evening reading as the IST moment it states", () => {
+    const r = inZone("UTC", "2026-03-15 6:30 pm");
+    expect(r!.day).toBe("Sun, 15 Mar");
+    expect(r!.time).toContain("6:30 pm");
+  });
+
+  it("gives a twelve hour reading the same answer as its ISO spelling", () => {
+    for (const [loose, iso] of [
+      ["2026-03-15 6:30 pm", "2026-03-15T18:30"],
+      ["2026-03-15 6:30pm", "2026-03-15T18:30"],
+      ["2026-03-15 6:30 PM", "2026-03-15T18:30"],
+      ["2026-03-15 06:30 p.m.", "2026-03-15T18:30"],
+      ["2026-03-15T6:30 pm", "2026-03-15T18:30"],
+      ["2026-03-15 6:30:45 pm", "2026-03-15T18:30:45"],
+      ["2026-03-15 11:30 am", "2026-03-15T11:30"]
+    ]) {
+      expect(inZone("UTC", loose)).toEqual(inZone("UTC", iso));
+    }
+  });
+
+  // Noon and midnight are the one place the arithmetic is not "add twelve", and
+  // they are also the two readings `new Date` refused outright, so before this
+  // the string itself was printed where the date belongs.
+  it("reads 12 am as midnight and 12 pm as noon", () => {
+    expect(inZone("UTC", "2026-03-15 12:30 am")).toEqual(inZone("UTC", "2026-03-15T00:30"));
+    expect(inZone("UTC", "2026-03-15 12:30 pm")).toEqual(inZone("UTC", "2026-03-15T12:30"));
+  });
+
+  // An hour missing its leading zero, and extra spaces between the date and the
+  // time, are the same failure as the marker: a stated time the spelling check
+  // could not see. The hour here is a morning one, so the day survived by luck
+  // while the instant that orders the listing was still five and a half hours
+  // out.
+  it("reads a loosely spelled twenty-four hour reading as stated", () => {
+    expect(inZone("UTC", "2026-03-15 8:30")).toEqual(inZone("UTC", "2026-03-15T08:30"));
+    expect(inZone("UTC", "2026-03-15  18:30")).toEqual(inZone("UTC", "2026-03-15T18:30"));
+    expect(inZone("UTC", "2026-03-15 0:30")).toEqual(inZone("UTC", "2026-03-15T00:30"));
+  });
+
+  it("keeps a loosely spelled reading out of the server's zone", () => {
+    for (const tz of ["UTC", "Asia/Kolkata", "America/New_York"]) {
+      expect(inZone(tz, "2026-03-15 6:30 pm")).toEqual({
+        day: "Sun, 15 Mar",
+        time: inZone("UTC", "2026-03-15T18:30")!.time
+      });
+    }
+  });
+
+  // A marker makes the reading a twelve hour one, so an hour no twelve hour
+  // clock has is not a reading to be guessed at. It keeps the answer it had.
+  it("refuses a twelve hour marker on an hour past twelve", () => {
+    for (const v of ["2026-03-15 13:30 pm", "2026-03-15 0:30 am", "2026-03-15 18:30 pm"]) {
+      expect(inZone("UTC", v)!.time).toBe("");
+    }
   });
 });
 
