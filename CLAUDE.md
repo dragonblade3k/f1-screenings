@@ -18,6 +18,11 @@ project is and why it is built this way.
 2. **Nothing reaches the public pages without human approval.** Ingestion writes
    `Candidate` rows only. `Event` rows are created solely by the approve
    handlers. Public pages read `Event` and must never query `Candidate`.
+   Both approve handlers condition their write on the candidate's current
+   status, from the one list in `lib/review.ts`, so a row a human rejected
+   cannot be published over that rejection. Keep the condition in the write
+   rather than in a read beforehand, which is why both use `updateMany` and
+   check the count rather than `update` on the id alone.
 
 3. **Approval is atomic.** `api/admin/approve` and `update-and-approve` wrap the
    status update and the `Event` insert in `prisma.$transaction`. Keep it.
@@ -59,6 +64,7 @@ lib/
   deployment.ts                  isPublicOnly(), which surfaces this process serves
   extraction.ts                  EVENT_SCHEMA and the prompt, the model contract
   price.ts                       normalizePriceINR, the pure rupee rule
+  review.ts                      which statuses an approve may act on
   admin.ts                       requireAdmin(req)
   prisma.ts                      client singleton
 scripts/
@@ -116,8 +122,8 @@ npm test                 # vitest, pure units only
 ## Testing
 
 `npm test` runs vitest against `lib/format.test.ts`, `lib/dedupe.test.ts`,
-`lib/confidence.test.ts`, `lib/price.test.ts` and `lib/extraction.test.ts`
-(118 cases). All cover pure
+`lib/confidence.test.ts`, `lib/price.test.ts`, `lib/extraction.test.ts` and
+`lib/review.test.ts` (122 cases). All cover pure
 functions, so they need no database and no Ollama.
 CI runs `npx prisma generate`, `npm run typecheck`, then `npm test` on every
 pull request and every push to `main`.
