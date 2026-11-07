@@ -1,7 +1,7 @@
 import "dotenv/config";
 import * as cheerio from "cheerio";
 import { prisma } from "@/lib/prisma.js";
-import { isSameEvent, normalizeKey } from "@/lib/dedupe.js";
+import { isSameEvent, venueKey } from "@/lib/dedupe.js";
 import { normalizeConfidence } from "@/lib/confidence.js";
 import { normalizePriceINR } from "@/lib/price.js";
 import { parseISTInstant } from "@/lib/format.js";
@@ -147,7 +147,8 @@ async function alreadyIngested(sourceUrl: string) {
 // a normalized key on the row and put a unique index on it.
 async function isDuplicate(venueName: string, session: string, startTimeIST: string) {
   const incoming = { venueName, startTimeIST };
-  if (!normalizeKey(venueName)) return false;
+  // Same question isSameEvent asks, asked once here instead of per stored row.
+  if (!venueKey(venueName)) return false;
 
   const stored = await prisma.candidate.findMany({
     where: { session },
