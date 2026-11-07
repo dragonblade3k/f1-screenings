@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isSameEvent, normalizeKey } from "./dedupe";
+import { isSameEvent, normalizeKey, venueKey } from "./dedupe";
 
 const at = (venueName: string, startTimeIST: string) => ({ venueName, startTimeIST });
 
@@ -11,6 +11,42 @@ describe("normalizeKey", () => {
   it("handles absent values", () => {
     expect(normalizeKey(null)).toBe("");
     expect(normalizeKey(undefined)).toBe("");
+  });
+});
+
+// The venue half of the rule. `normalizeKey` answers what a string compares as;
+// this answers whether the string names a venue in the first place, which is
+// the question the guard in isSameEvent needs and the question the empty-string
+// check only half answered.
+describe("venueKey", () => {
+  it("compares a real venue the way normalizeKey does", () => {
+    expect(venueKey("  Doolally   Taproom ")).toBe("doolally taproom");
+  });
+
+  it("answers empty for a value that names no venue", () => {
+    expect(venueKey("")).toBe("");
+    expect(venueKey("   ")).toBe("");
+    expect(venueKey(null)).toBe("");
+    expect(venueKey(undefined)).toBe("");
+  });
+
+  // The placeholders the extractor leaves behind. These are stored verbatim,
+  // because ingestion rejects only the empty string, and the public card
+  // already renders every one of them as "Venue not named".
+  it("answers empty for the placeholders the extractor writes", () => {
+    expect(venueKey("undefined")).toBe("");
+    expect(venueKey("null")).toBe("");
+    expect(venueKey("string")).toBe("");
+    expect(venueKey("N/A")).toBe("");
+    expect(venueKey("  Undefined  ")).toBe("");
+    expect(venueKey("-")).toBe("");
+  });
+
+  // Only the whole value is a placeholder. A venue whose name happens to
+  // contain one of those words is a venue.
+  it("keeps a real name that merely contains a placeholder word", () => {
+    expect(venueKey("The String Bar")).toBe("the string bar");
+    expect(venueKey("Null Cafe")).toBe("null cafe");
   });
 });
 
@@ -146,5 +182,37 @@ describe("isSameEvent", () => {
     expect(isSameEvent(at("", "2026-03-15T18:30:00+05:30"), at("", "2026-03-15T18:30:00+05:30"))).toBe(false);
     expect(isSameEvent(at("", ""), at("Doolally Taproom", ""))).toBe(false);
     expect(isSameEvent(at("Doolally Taproom", ""), at("", ""))).toBe(false);
+  });
+
+  // The same failure reached through the other spelling of "no venue name".
+  // Ingestion rejects only the empty string, so an extraction that could not
+  // read a venue is stored holding the literal "undefined" or "string", and on
+  // the text comparison those were a venue and equal to each other. Two
+  // unrelated screenings extracted from two pages, neither naming a venue the
+  // model could read, were therefore a duplicate pair, and the second was
+  // dropped by ingestion before it ever reached the review queue. Nothing in
+  // the queue showed that it had happened, because the row was never written.
+  it("never matches an extraction whose venue is a placeholder", () => {
+    expect(isSameEvent(at("undefined", ""), at("undefined", ""))).toBe(false);
+    expect(isSameEvent(at("string", "2026-03-15T18:30"), at("string", "2026-03-15T18:30"))).toBe(false);
+    expect(isSameEvent(at("N/A", "2026-03-15T18:30"), at("n/a", "2026-03-15T18:30"))).toBe(false);
+    expect(isSameEvent(at("  Undefined  ", ""), at("undefined", ""))).toBe(false);
+  });
+
+  it("never matches a placeholder venue against a real one", () => {
+    const stated = at("Doolally Taproom", "2026-03-15T18:30");
+    expect(isSameEvent(at("undefined", "2026-03-15T18:30"), stated)).toBe(false);
+    expect(isSameEvent(stated, at("undefined", "2026-03-15T18:30"))).toBe(false);
+  });
+
+  // The narrowing does not reach a venue that merely reads like a placeholder.
+  // A real duplicate still has to be caught, which is the point of the rule.
+  it("still matches two extractions of a venue whose name contains a placeholder word", () => {
+    expect(
+      isSameEvent(
+        at("The String Bar", "2026-03-15T18:30:00+05:30"),
+        at("the string  BAR", "2026-03-15T18:30")
+      )
+    ).toBe(true);
   });
 });

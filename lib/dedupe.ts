@@ -14,11 +14,38 @@
 // "Sun, 15 Mar · 6:30 pm", so the review queue showed two cards a reviewer had
 // no way to tell apart, and approving both published the same screening twice
 // on a page whose whole claim is that it is the one place to look.
+//
+// The venue half asks the read path's `venueName` whether a value names a venue
+// at all, rather than only checking for the empty string. The guard against
+// collapsing unnamed rows into one duplicate was written for the empty string,
+// but the extractor has two ways of saying it could not read a venue and the
+// other one is a placeholder: `scripts/ingest.ts` rejects only the empty
+// string, so the literal "undefined", "null" and "string" are stored verbatim,
+// and the public card already renders all of them as "Venue not named". On the
+// text comparison those placeholders were a venue, equal to each other, so two
+// unrelated screenings whose venue the model failed to read were a duplicate
+// pair and the second was discarded before any human saw it.
 
-import { parseISTClockInstant } from "./format";
+import { parseISTClockInstant, venueName as statedVenue } from "./format";
 
 export function normalizeKey(s: string | null | undefined): string {
   return (s ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+/**
+ * The comparable form of a venue name, or "" when the value names no venue.
+ *
+ * This goes through `venueName` rather than straight to `normalizeKey` because
+ * the empty string is not the only way an extraction says it could not read a
+ * venue. `venueName` is the read path's answer to the same question and it
+ * already rejects the placeholders the extractor leaves behind, the literal
+ * "undefined", "null" and "string" among them, which are documented as real
+ * values in the database and which the public card renders as "Venue not
+ * named". Asking it here is what keeps one definition of a named venue on both
+ * sides instead of two that disagree.
+ */
+export function venueKey(raw: string | null | undefined): string {
+  return normalizeKey(statedVenue(raw));
 }
 
 export type EventKey = {
@@ -35,14 +62,16 @@ export type EventKey = {
  *
  * Callers narrow by session before comparing, so session is not checked here.
  *
- * An extraction with no venue name matches nothing. Treating empty as equal
+ * An extraction with no venue name matches nothing. Treating unnamed as equal
  * would collapse every unnamed row into a single duplicate and silently drop
- * real events whose venue the model failed to read.
+ * real events whose venue the model failed to read. "No venue name" is
+ * `venueKey` returning "", which covers the placeholder the extractor writes as
+ * well as the empty string.
  */
 export function isSameEvent(a: EventKey, b: EventKey): boolean {
-  const venue = normalizeKey(a.venueName);
+  const venue = venueKey(a.venueName);
   if (!venue) return false;
-  if (venue !== normalizeKey(b.venueName)) return false;
+  if (venue !== venueKey(b.venueName)) return false;
   return isSameStartTime(a.startTimeIST, b.startTimeIST);
 }
 
