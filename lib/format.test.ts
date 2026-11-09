@@ -104,6 +104,20 @@ describe("mapsQuery", () => {
   it("still answers when the venue name is all the row has", () => {
     expect(mapsQuery("Doolally Taproom", "undefined", "UNKNOWN")).toBe("Doolally Taproom");
   });
+
+  // The same failure this helper was extracted to stop, with the other of the
+  // app's two fallback sentences. An approved row whose venue name was empty
+  // asked the maps provider for a venue called "(unknown venue)" in Mumbai,
+  // which returns the wrong place rather than nothing.
+  it("drops the fallback sentence the approve routes used to write", () => {
+    const q = mapsQuery("(unknown venue)", "Shop 5, Kamala Mills", "MUMBAI");
+    expect(q).toBe("Shop 5, Kamala Mills Mumbai");
+    expect(q).not.toContain("unknown");
+  });
+
+  it("answers null when that sentence is the only thing the row named", () => {
+    expect(mapsQuery("(unknown venue)", "", "UNKNOWN")).toBeNull();
+  });
 });
 
 describe("sessionKind", () => {
@@ -174,6 +188,14 @@ describe("clean", () => {
   it("does not strip a real value that merely contains a junk word", () => {
     expect(clean("Null Cafe")).toBe("Null Cafe");
   });
+
+  // Not an extractor placeholder but this app's own: the approve routes used to
+  // write it into Event.venueName whenever the name was empty, so rows created
+  // before they stopped still carry it and it has to read as missing.
+  it("strips the fallback sentence the approve routes used to write", () => {
+    expect(clean("(unknown venue)")).toBe("");
+    expect(clean("  (Unknown Venue)  ")).toBe("");
+  });
 });
 
 describe("venueName", () => {
@@ -215,6 +237,20 @@ describe("venueName", () => {
   it("does not reject a venue whose name contains a junk word", () => {
     expect(venueName("Null Cafe")).toBe("Null Cafe");
     expect(venueName("The String Bar")).toBe("The String Bar");
+  });
+
+  // The write path's stand-in for an empty name, which this helper used to hand
+  // back as the venue. The card then printed "(unknown venue)" as the heading
+  // instead of its own "Venue not named", which is the same contradiction the
+  // placeholder case above describes, with the app rather than the model as the
+  // author of the word.
+  it("answers null for the fallback sentence the approve routes used to write", () => {
+    expect(venueName("(unknown venue)")).toBeNull();
+    expect(venueName("(Unknown Venue)")).toBeNull();
+  });
+
+  it("does not reject a venue whose name merely contains that sentence", () => {
+    expect(venueName("The (Unknown Venue) Bar")).toBe("The (Unknown Venue) Bar");
   });
 });
 

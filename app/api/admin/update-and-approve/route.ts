@@ -72,7 +72,9 @@ export async function POST(req: Request) {
       sport: updated.sport,
       area: updated.area,
       locality: updated.locality,
-      venueName: updated.venueName || "(unknown venue)",
+      // As stored, empty included; see the approve route for why there is no
+      // fallback sentence here.
+      venueName: updated.venueName,
       address: updated.address,
       session: updated.session,
       startTimeIST: updated.startTimeIST,

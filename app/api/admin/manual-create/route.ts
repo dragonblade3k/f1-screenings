@@ -8,7 +8,11 @@ export async function POST(req: Request) {
   if (auth) return auth;
 
   const form = await req.formData();
-  const venueName = String(form.get("venueName") || "(unknown venue)");
+  // Empty rather than a fallback sentence, for the reason the approve route
+  // gives: the read path has its own words for a row that names no venue, and a
+  // sentence written here is indistinguishable from a venue actually called
+  // that.
+  const venueName = String(form.get("venueName") || "");
 
   await prisma.event.create({
     data: {
