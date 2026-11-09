@@ -218,7 +218,26 @@ export function parseISTClockInstant(raw: string | null | undefined): Date | nul
 // Ingestion writes whatever the extractor produced, and some rows carry the
 // literal strings "undefined", "null", or the placeholder "string" where a
 // field was missing. Render nothing rather than printing the word.
-const JUNK = new Set(["undefined", "null", "none", "n/a", "na", "string", "-", "—"]);
+//
+// "(unknown venue)" is on the list for a different reason: no model ever wrote
+// it, this app did. `Event.venueName` is a required column, so all three
+// approve paths substituted that sentence when the venue name was empty, and
+// nothing on the read path knew it was a stand-in. The card printed it as the
+// name of the bar, beside an "Area unconfirmed" that reads as missing, and
+// `mapsQuery` sent it to the maps provider as the venue to search for. The
+// write paths no longer invent it; it stays here because rows written before
+// that still hold it, which is what invariant 4 asks of this file.
+const JUNK = new Set([
+  "undefined",
+  "null",
+  "none",
+  "n/a",
+  "na",
+  "string",
+  "-",
+  "—",
+  "(unknown venue)"
+]);
 
 export function clean(raw: string | null | undefined): string {
   const v = (raw ?? "").trim();

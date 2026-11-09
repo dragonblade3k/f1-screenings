@@ -35,7 +35,11 @@ export async function POST(req: Request) {
           sport: c.sport,
           area: c.area,
           locality: c.locality,
-          venueName: c.venueName || "(unknown venue)",
+          // Written as stored, empty included. `Event.venueName` is required but
+          // not non-empty, and both public pages already have a sentence for a
+          // row that names no venue. Substituting one here produced a different
+          // sentence that `venueName()` then read as a real name.
+          venueName: c.venueName,
           address: c.address,
           session: c.session,
           startTimeIST: c.startTimeIST,
